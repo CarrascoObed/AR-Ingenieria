@@ -1,0 +1,33 @@
+# Node
+node_modules/
+dist/
+*.local
+
+# Java / Maven
+backend/target/
+*.class
+
+# Android / Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+*.aab
+*.keystore
+*.jks
+captures/
+.externalNativeBuild/
+.cxx/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Entorno
+.env

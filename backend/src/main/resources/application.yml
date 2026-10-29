@@ -1,0 +1,25 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: aring-backend
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:aring}
+    username: ${DB_USER:aring}
+    password: ${DB_PASSWORD:aring123}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+  jackson:
+    default-property-inclusion: non_null
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:ARIngenieriaClaveSecretaJWT2026SuperSeguraParaFirmarTokensDeLaAplicacionWebAdmin123456789}
+    expiration-ms: 86400000
+  seed-demo-data: ${SEED_DEMO_DATA:true}

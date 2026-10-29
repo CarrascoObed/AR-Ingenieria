@@ -1,0 +1,30 @@
+package com.aring.movil.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+val Violeta = Color(0xFF6C3CE9)
+val VioletaOscuro = Color(0xFF4B2495)
+val VioletaMedio = Color(0xFF8B5CF6)
+val VioletaClaro = Color(0xFFEEE8FF)
+val FondoGris = Color(0xFFF2F2F8)
+val Blanco = Color(0xFFFFFFFF)
+val TextoOscuro = Color(0xFF222222)
+val TextoGris = Color(0xFF6B6B78)
+val VerdeOk = Color(0xFF22A06B)
+val Amarillo = Color(0xFFF59E0B)
+val RojoError = Color(0xFFD64545)
+val BordeSuave = Color(0xFFE3E1EA)
+val FondoChip = Color(0xFFF1F0F7)
+
+val FondoChipVerde = Color(0xFFE3F7EE)
+val FondoChipAmarillo = Color(0xFFFEF3E2)
+val FondoChipRojo = Color(0xFFFBE7E7)
+val TextoChipAmarillo = Color(0xFFB7791F)
+val FondoBannerError = Color(0xFFFBE7E7)
+val BordeBannerError = Color(0xFFF3C6C6)
+val FondoBannerOk = Color(0xFFE3F7EE)
+val BordeBannerOk = Color(0xFFBFE9D4)
+val FondoFooter = Color(0xFF14083C)
+val TextoFooter = Color(0xFFE8DFFF)
+val BlancoSuave = Color(0xFFE8DFFF)
+val GrisDeshabilitado = Color(0xFFB8B1C9)

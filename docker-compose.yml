@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: aring-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aring
+      POSTGRES_USER: aring
+      POSTGRES_PASSWORD: aring123
+    ports:
+      - "5432:5432"
+    volumes:
+      - aring-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aring -d aring"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: aring-backend
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: aring
+      DB_USER: aring
+      DB_PASSWORD: aring123
+      SEED_DEMO_DATA: "true"
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    container_name: aring-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  aring-pgdata:
