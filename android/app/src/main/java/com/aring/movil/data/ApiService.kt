@@ -21,11 +21,10 @@ object ApiService {
 
     /**
      * Dirección del backend.
-     * - Dispositivo físico / misma red Wi-Fi: IP local de la PC que corre el backend
-     *   (ej. http://192.168.1.12:8080).
+     * - Dispositivo físico / misma red Wi-Fi: IP local de la PC que corre el backend.
      * - Emulador Android: usar http://10.0.2.2:8080 (alias al localhost de la PC).
      */
-    const val BASE_URL = "http://192.168.1.17:8080"
+    const val BASE_URL = "http://192.168.1.22:8080"
 
     @Volatile
     var token: String? = null
@@ -49,9 +48,11 @@ object ApiService {
     suspend fun loginTecnico(rut: String, password: String): String =
         login(rut, password).optString("token")
 
-    suspend fun dashboardStats(): JSONObject = parsearObjeto(ejecutar("GET", "/api/dashboard/stats"))
+    suspend fun dashboardStats(): JSONObject =
+        parsearObjeto(ejecutar("GET", "/api/dashboard/stats"))
 
-    suspend fun tareas(): JSONArray = parsearArreglo(ejecutar("GET", "/api/tareas"))
+    suspend fun tareas(): JSONArray =
+        parsearArreglo(ejecutar("GET", "/api/tareas"))
 
     suspend fun tareasMias(tecnicoId: Int): JSONArray =
         parsearArreglo(ejecutar("GET", "/api/tareas/mias?tecnicoId=$tecnicoId"))
@@ -62,20 +63,39 @@ object ApiService {
     suspend fun iniciarTarea(id: Int, ayudantesIds: List<Int>): JSONObject {
         val arr = JSONArray()
         ayudantesIds.forEach { arr.put(it) }
-        return parsearObjeto(ejecutar("POST", "/api/tareas/$id/iniciar", JSONObject().put("ayudantesIds", arr).toString()))
+        return parsearObjeto(
+            ejecutar(
+                "POST",
+                "/api/tareas/$id/iniciar",
+                JSONObject().put("ayudantesIds", arr).toString()
+            )
+        )
     }
 
     suspend fun actualizarCabeceraTarea(id: Int, tecnicoId: Int): JSONObject =
-        parsearObjeto(ejecutar("PUT", "/api/tareas/$id", JSONObject().put("tecnicoCabeceraId", tecnicoId).toString()))
+        parsearObjeto(
+            ejecutar(
+                "PUT",
+                "/api/tareas/$id",
+                JSONObject().put("tecnicoCabeceraId", tecnicoId).toString()
+            )
+        )
 
     suspend fun cambiarEstadoTarea(id: Int, estado: String): JSONObject =
-        parsearObjeto(ejecutar("PUT", "/api/tareas/$id/estado", JSONObject().put("estado", estado).toString()))
+        parsearObjeto(
+            ejecutar(
+                "PUT",
+                "/api/tareas/$id/estado",
+                JSONObject().put("estado", estado).toString()
+            )
+        )
 
     suspend fun eliminarTarea(id: Int) {
         ejecutar("DELETE", "/api/tareas/$id")
     }
 
-    suspend fun tecnicos(): JSONArray = parsearArreglo(ejecutar("GET", "/api/tecnicos"))
+    suspend fun tecnicos(): JSONArray =
+        parsearArreglo(ejecutar("GET", "/api/tecnicos"))
 
     suspend fun crearTecnico(cuerpo: JSONObject): JSONObject =
         parsearObjeto(ejecutar("POST", "/api/tecnicos", cuerpo.toString()))
@@ -88,7 +108,11 @@ object ApiService {
     }
 
     suspend fun notificaciones(tecnicoId: Int?): JSONArray {
-        val path = if (tecnicoId != null) "/api/notificaciones?tecnicoId=$tecnicoId" else "/api/notificaciones"
+        val path = if (tecnicoId != null) {
+            "/api/notificaciones?tecnicoId=$tecnicoId"
+        } else {
+            "/api/notificaciones"
+        }
         return parsearArreglo(ejecutar("GET", path))
     }
 
@@ -96,7 +120,11 @@ object ApiService {
         parsearObjeto(ejecutar("PUT", "/api/notificaciones/$id/leida"))
 
     suspend fun marcarTodasLeidas(tecnicoId: Int?) {
-        val path = if (tecnicoId != null) "/api/notificaciones/leer-todas?tecnicoId=$tecnicoId" else "/api/notificaciones/leer-todas"
+        val path = if (tecnicoId != null) {
+            "/api/notificaciones/leer-todas?tecnicoId=$tecnicoId"
+        } else {
+            "/api/notificaciones/leer-todas"
+        }
         ejecutar("PUT", path)
     }
 
@@ -108,29 +136,42 @@ object ApiService {
         ejecutar("DELETE", "/api/notificaciones?tecnicoId=$tecnicoId")
     }
 
-    suspend fun enviarInforme(token: String, tareaId: Long, cuerpo: JSONObject): JSONObject =
-        withContext(Dispatchers.IO) {
-            val request = Request.Builder()
-                .url("$BASE_URL/api/tareas/$tareaId/tableros")
-                .addHeader("Authorization", "Bearer $token")
-                .post(cuerpo.toString().toRequestBody(jsonMediaType))
-                .build()
-            client.newCall(request).execute().use { resp ->
-                val body = resp.body?.string().orEmpty()
-                if (!resp.isSuccessful) {
-                    val mensaje = runCatching { JSONObject(body).optString("mensaje") }.getOrNull()
-                    throw ApiException(
-                        mensaje?.takeIf { it.isNotBlank() }
-                            ?: "Error del servidor al guardar el informe (${resp.code}).",
-                        resp.code
-                    )
-                }
-                runCatching { JSONObject(body) }.getOrDefault(JSONObject())
+    suspend fun enviarInforme(
+        token: String,
+        tareaId: Long,
+        cuerpo: JSONObject
+    ): JSONObject = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$BASE_URL/api/tareas/$tareaId/tableros")
+            .addHeader("Authorization", "Bearer $token")
+            .post(cuerpo.toString().toRequestBody(jsonMediaType))
+            .build()
+
+        client.newCall(request).execute().use { resp ->
+            val body = resp.body?.string().orEmpty()
+            if (!resp.isSuccessful) {
+                val mensaje = runCatching {
+                    JSONObject(body).optString("mensaje")
+                }.getOrNull()
+
+                throw ApiException(
+                    mensaje?.takeIf { it.isNotBlank() }
+                        ?: "Error del servidor al guardar el informe (${resp.code}).",
+                    resp.code
+                )
             }
+            runCatching { JSONObject(body) }.getOrDefault(JSONObject())
         }
+    }
 
     suspend fun tablerosTarea(token: String, tareaId: Int): JSONArray =
-        parsearArreglo(ejecutar("GET", "/api/tareas/$tareaId/tableros", tokenOverride = token))
+        parsearArreglo(
+            ejecutar(
+                "GET",
+                "/api/tareas/$tareaId/tableros",
+                tokenOverride = token
+            )
+        )
 
     suspend fun informeTarea(tareaId: Int): ByteArray =
         withContext(Dispatchers.IO) {
@@ -139,17 +180,22 @@ object ApiService {
                 .addHeader("Authorization", "Bearer ${token ?: ""}")
                 .get()
                 .build()
+
             client.newCall(request).execute().use { resp ->
                 if (!resp.isSuccessful) {
                     val body = resp.body?.string().orEmpty()
-                    val mensaje = runCatching { JSONObject(body).optString("mensaje") }.getOrNull()
+                    val mensaje = runCatching {
+                        JSONObject(body).optString("mensaje")
+                    }.getOrNull()
+
                     throw ApiException(
                         mensaje?.takeIf { it.isNotBlank() }
                             ?: "Error del servidor al generar el informe (${resp.code}).",
                         resp.code
                     )
                 }
-                resp.body?.bytes() ?: throw ApiException("Respuesta vacía del servidor.")
+                resp.body?.bytes()
+                    ?: throw ApiException("Respuesta vacía del servidor.")
             }
         }
 
@@ -166,32 +212,43 @@ object ApiService {
         }
     }
 
-    private suspend fun ejecutar(method: String, path: String, cuerpo: String? = null, tokenOverride: String? = null): String =
-        withContext(Dispatchers.IO) {
-            val request = Request.Builder()
-                .url("$BASE_URL$path")
-                .apply { (tokenOverride ?: token)?.let { header("Authorization", "Bearer $it") } }
-                .method(method, cuerpo?.toRequestBody(jsonMediaType))
-                .build()
-            try {
-                client.newCall(request).execute().use { resp ->
-                    val body = resp.body?.string().orEmpty()
-                    if (!resp.isSuccessful) {
-                        val mensaje = runCatching { JSONObject(body).optString("mensaje") }.getOrNull()
-                        throw ApiException(
-                            mensaje?.takeIf { it.isNotBlank() } ?: "Error del servidor (${resp.code}).",
-                            resp.code
-                        )
-                    }
-                    body
-                }
-            } catch (e: IOException) {
-                throw ApiException(
-                    "No se pudo conectar con el servidor. Verifique que el backend esté disponible.",
-                    null
-                )
+    private suspend fun ejecutar(
+        method: String,
+        path: String,
+        cuerpo: String? = null,
+        tokenOverride: String? = null
+    ): String = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$BASE_URL$path")
+            .apply {
+                (tokenOverride ?: token)?.let { header("Authorization", "Bearer $it") }
             }
+            .method(method, cuerpo?.toRequestBody(jsonMediaType))
+            .build()
+
+        try {
+            client.newCall(request).execute().use { resp ->
+                val body = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    val mensaje = runCatching {
+                        JSONObject(body).optString("mensaje")
+                    }.getOrNull()
+
+                    throw ApiException(
+                        mensaje?.takeIf { it.isNotBlank() }
+                            ?: "Error del servidor (${resp.code}).",
+                        resp.code
+                    )
+                }
+                body
+            }
+        } catch (e: IOException) {
+            throw ApiException(
+                "No se pudo conectar con el servidor. Verifique que el backend esté disponible.",
+                null
+            )
         }
+    }
 
     private fun parsearObjeto(body: String): JSONObject =
         runCatching { JSONObject(body) }.getOrDefault(JSONObject())
