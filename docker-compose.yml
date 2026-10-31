@@ -27,7 +27,6 @@ services:
       DB_NAME: aring
       DB_USER: aring
       DB_PASSWORD: aring123
-      SEED_DEMO_DATA: "true"
     ports:
       - "8080:8080"
     depends_on:

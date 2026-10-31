@@ -22,4 +22,3 @@ app:
   jwt:
     secret: ${JWT_SECRET:ARIngenieriaClaveSecretaJWT2026SuperSeguraParaFirmarTokensDeLaAplicacionWebAdmin123456789}
     expiration-ms: 86400000
-  seed-demo-data: ${SEED_DEMO_DATA:true}
