@@ -24,10 +24,10 @@ object ApiService {
 
     /**
      * Dirección del backend.
-     * - Dispositivo físico / misma red Wi-Fi: IP local de la PC que corre el backend.
+     * - Dispositivo físico / misma red Wi-Fi: IP local del servidor que corre el backend.
      * - Emulador Android: usar http://10.0.2.2:8080 (alias al localhost de la PC).
      */
-    const val BASE_URL = "http://192.168.1.17:8080"
+    const val BASE_URL = "http://192.168.1.22:8080"
 
     @Volatile
     var token: String? = null
