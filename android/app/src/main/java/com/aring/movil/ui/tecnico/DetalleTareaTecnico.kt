@@ -122,13 +122,20 @@ fun DetalleTareaTecnico(
             Spacer(Modifier.height(12.dp))
         }
 
-        BtnPrimario(
-            texto = if (tarea.sincronizacionPendiente) "Pendiente de sincronización" else if (tarea.estado == "En proceso") "Retomar tarea" else "Ingresar a la tarea",
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !tarea.sincronizacionPendiente,
-            icono = Icons.Filled.PlayArrow
-        ) {
-            onIngresar(tarea)
+        if (tarea.estado == "Finalizada" && !tarea.sincronizacionPendiente) {
+            Text(
+                "Tarea finalizada. El informe completo está disponible en el panel web del administrador.",
+                color = TextoGris,
+                fontSize = 13.sp
+            )
+        } else {
+            BtnPrimario(
+                texto = if (tarea.estado == "En proceso") "Retomar tarea" else "Ingresar a la tarea",
+                modifier = Modifier.fillMaxWidth(),
+                icono = Icons.Filled.PlayArrow
+            ) {
+                onIngresar(tarea)
+            }
         }
     }
 }

@@ -36,6 +36,14 @@ function guardarOcultas(ids) {
   localStorage.setItem(CLAVE_OCULTAS, JSON.stringify(Array.from(ids)));
 }
 
+/** Minúsculas sin tildes ni 'ñ': hace la búsqueda insensible a acentos. */
+function normalizar(texto) {
+  return (texto || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 export default function Tareas() {
   const { key } = useRefresh();
 
@@ -192,13 +200,18 @@ export default function Tareas() {
     setSugerenciasAbiertas(false);
   };
 
-  const textoDireccion = form.direccion.trim().toLowerCase();
+  const textoDireccion = form.direccion.trim();
+  const textoBusqueda = normalizar(textoDireccion);
+  // Busca por dirección, sin distinguir tildes ni "ñ".
+  // Con el campo vacío muestra TODOS los clientes registrados (selector completo).
   const sugerencias =
-    textoDireccion === ''
-      ? []
-      : clientes.filter((c) => c.direccion.toLowerCase().includes(textoDireccion));
+    textoBusqueda === ''
+      ? clientes
+      : clientes.filter((c) => normalizar(c.direccion).includes(textoBusqueda));
   const mostrarSugerencias =
-    crearAbierto && sugerenciasAbiertas && textoDireccion !== '' && sugerencias.length > 0;
+    crearAbierto && sugerenciasAbiertas && clientes.length > 0 && sugerencias.length > 0;
+  const sinCoincidencia =
+    crearAbierto && sugerenciasAbiertas && textoBusqueda !== '' && clientes.length > 0 && sugerencias.length === 0;
 
   const limpiarFinalizadas = () => {
     const ocultas = leerOcultas();
@@ -362,6 +375,11 @@ export default function Tareas() {
                   ))}
                 </div>
               )}
+              {sinCoincidencia && (
+                <small style={{ fontSize: 12, color: 'var(--rojo-error)', display: 'block', marginTop: 4 }}>
+                  Ningún cliente coincide con la dirección escrita. La tarea se creará sin cliente asociado; revise las tildes o registre el cliente en la pantalla Clientes.
+                </small>
+              )}
             </div>
             <small style={{ fontSize: 12, color: 'var(--texto-gris)', display: 'block', marginTop: 4 }}>
               {clienteId && clientes.length > 0 ? (
@@ -373,8 +391,10 @@ export default function Tareas() {
                   })()}
                   . Puedes seguir editando el nombre del recinto.
                 </span>
+              ) : clientes.length > 0 ? (
+                'Toca el campo de dirección para ver todos los clientes registrados, o escribe para buscar (sin distinguir tildes).'
               ) : (
-                'Escribe la dirección para ver clientes registrados con direcciones similares.'
+                'No hay clientes registrados todavía. Puede escribir la dirección a mano.'
               )}
             </small>
           </div>

@@ -179,6 +179,12 @@ object Repositorio {
             .filter { it.esDeTecnico(tecnicoId) && (it.estado != "Finalizada" || it.sincronizacionPendiente) }
             .sortedBy { it.id }
 
+    /** Tareas finalizadas confirmadas en el servidor; histórico de solo lectura del técnico. */
+    fun finalizadasDeTecnico(tecnicoId: Int): List<Tarea> =
+        tareas
+            .filter { it.esDeTecnico(tecnicoId) && it.estado == "Finalizada" && !it.sincronizacionPendiente }
+            .sortedByDescending { it.id }
+
     fun registrarTableroEnDispositivo(tareaId: Int) {
         val index = tareas.indexOfFirst { it.id == tareaId }
         if (index >= 0) reemplazarTarea(tareas[index].copy(tablerosRealizados = tareas[index].tablerosRealizados + 1))

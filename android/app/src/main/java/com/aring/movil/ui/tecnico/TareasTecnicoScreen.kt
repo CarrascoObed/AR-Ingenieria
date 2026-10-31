@@ -37,6 +37,8 @@ fun TareasTecnicoScreen(
     onAbrirTarea: (Tarea) -> Unit,
 ) {
     val tareas = Repositorio.tareasDeTecnico(tecnico.id)
+    val finalizadas = Repositorio.finalizadasDeTecnico(tecnico.id)
+    val hayHistorial = finalizadas.isNotEmpty()
 
     Column(
         Modifier
@@ -87,7 +89,7 @@ fun TareasTecnicoScreen(
         }
         Spacer(Modifier.height(8.dp))
 
-        if (tareas.isEmpty()) {
+        if (tareas.isEmpty() && !hayHistorial) {
             Vacio("No tienes tareas asignadas.")
         } else {
             LazyColumn(
@@ -95,54 +97,86 @@ fun TareasTecnicoScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(tareas, key = { it.id }) { t ->
-                    Tarjeta(
-                        Modifier.clickable { onAbrirTarea(t) }
-                    ) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                        ) {
-                            Text(
-                                t.codigo,
-                                color = Violeta,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
-                            )
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                            ) {
-                                if (t.esInvitado(tecnico.id)) {
-                                    ChipTipo("Invitado")
-                                }
-                                ChipEstado(t.estado)
-                            }
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        if (t.sincronizacionPendiente) {
-                            Text("Pendiente de sincronizar · se enviará al recuperar conexión", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
-                            Spacer(Modifier.height(6.dp))
-                        }
+                    TarjetaTareaTecnico(tarea = t, tecnicoId = tecnico.id, onAbrir = onAbrirTarea)
+                }
+                if (hayHistorial) {
+                    item(key = "historial") {
+                        Spacer(Modifier.height(8.dp))
                         Text(
-                            t.nombreRecinto,
+                            "Tareas finalizadas",
                             modifier = Modifier.fillMaxWidth(),
                             textAlign = TextAlign.Center,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
+                            fontSize = 16.sp,
                             color = TextoOscuro
                         )
-                        Spacer(Modifier.height(4.dp))
                         Text(
-                            t.direccion,
+                            "Historial de tareas completadas; sus informes están en el panel web.",
                             modifier = Modifier.fillMaxWidth(),
                             textAlign = TextAlign.Center,
                             color = TextoGris,
-                            fontSize = 13.5.sp
+                            fontSize = 12.sp
                         )
+                    }
+                    items(finalizadas, key = { "finalizada-" + it.id }) { t ->
+                        TarjetaTareaTecnico(tarea = t, tecnicoId = tecnico.id, onAbrir = onAbrirTarea)
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TarjetaTareaTecnico(
+    tarea: Tarea,
+    tecnicoId: Int,
+    onAbrir: (Tarea) -> Unit,
+) {
+    Tarjeta(
+        Modifier.clickable { onAbrir(tarea) }
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            Text(
+                tarea.codigo,
+                color = Violeta,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                if (tarea.esInvitado(tecnicoId)) {
+                    ChipTipo("Invitado")
+                }
+                ChipEstado(tarea.estado)
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        if (tarea.sincronizacionPendiente) {
+            Text("Pendiente de sincronizar · se enviará al recuperar conexión", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            Spacer(Modifier.height(6.dp))
+        }
+        Text(
+            tarea.nombreRecinto,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center,
+            fontWeight = FontWeight.Bold,
+            fontSize = 15.sp,
+            color = TextoOscuro
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            tarea.direccion,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center,
+            color = TextoGris,
+            fontSize = 13.5.sp
+        )
     }
 }

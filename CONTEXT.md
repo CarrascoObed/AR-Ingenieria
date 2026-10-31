@@ -250,6 +250,10 @@ Docker backend: imagen base `maven:3.9-eclipse-temurin-21` build + `eclipse-temu
 
 **Contador de tableros en móvil:** `Repositorio.conEstadoLocal` suma al `tablerosRealizados` del servidor los informes aún pendientes en el outbox (`OfflineSync.informes(id).size`), de modo que el contador no aparece en cero tras guardar tableros sin conexión.
 
+**Historial del técnico (2026-10-31):** la pestaña Tareas del técnico agrega la sección "Tareas finalizadas" (`Repositorio.finalizadasDeTecnico`, solo lectura): las tareas ya completadas dejan de desaparecer de la lista y se abren en modo detalle sin botón de inicio. Antes, toda tarea FINALIZADA quedaba oculta para el técnico.
+
+**Selector de clientes al crear tarea (web):** `Tareas.jsx` normaliza la búsqueda (`normalizar()` quita tildes/ñ) para sugerencias tolerantes a acentos, muestra todos los clientes registrados al enfocar el campo con texto vacío y avisa cuando no hay coincidencia ("La tarea se creará sin cliente asociado"); sin cliente seleccionado el `clienteId` va null.
+
 ---
 
 ## 9. Frontend (panel web React)
