@@ -63,7 +63,7 @@ export default function Login() {
       <div className="login-tarjeta">
         <div className="login-logo">
           <img src="/favicon.svg" alt="Logo mantenimiento eléctrico" width={64} height={64} />
-          <h1>Eliezer</h1>
+          <h1>Panel de Administración</h1>
           <p>Gestión de mantenimiento eléctrico</p>
         </div>
 

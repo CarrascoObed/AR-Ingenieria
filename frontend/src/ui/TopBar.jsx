@@ -112,7 +112,7 @@ export default function TopBar() {
         <div className="topbar-logo">
           <img src="/favicon.svg" alt="Logo" />
           <span className="nombre">
-            {admin?.rol === 'ROLE_SUPER' ? 'Super Usuario' : 'Eliezer'}
+            {admin?.rol === 'ROLE_SUPER' ? 'Super Usuario' : 'Panel de Administración'}
           </span>
         </div>
       </div>
