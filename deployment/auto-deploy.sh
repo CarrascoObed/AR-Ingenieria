@@ -15,9 +15,9 @@ if [[ -n "$(git -C "$PROJECT_DIR" status --porcelain)" ]]; then
   exit 1
 fi
 
-git -C "$PROJECT_DIR" fetch --quiet origin "$BRANCH"
+git -C "$PROJECT_DIR" fetch --quiet origin "refs/heads/$BRANCH"
 LOCAL_COMMIT="$(git -C "$PROJECT_DIR" rev-parse HEAD)"
-REMOTE_COMMIT="$(git -C "$PROJECT_DIR" rev-parse "origin/$BRANCH")"
+REMOTE_COMMIT="$(git -C "$PROJECT_DIR" rev-parse FETCH_HEAD)"
 
 if [[ "$LOCAL_COMMIT" == "$REMOTE_COMMIT" ]]; then
   echo "Sin cambios nuevos en origin/$BRANCH."
