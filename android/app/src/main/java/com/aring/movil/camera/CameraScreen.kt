@@ -34,8 +34,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -58,11 +56,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.aring.movil.ui.panel.common.FilePathImage
 import com.aring.movil.ui.panel.common.PrimaryButton
 import com.aring.movil.ui.theme.RojoError
 import com.aring.movil.ui.theme.Violeta
-import com.aring.movil.ui.theme.VioletaClaro
 
 private fun hasCameraPermission(context: Context): Boolean =
     ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
@@ -79,9 +75,9 @@ fun CameraScreen(onDone: () -> Unit) {
         ActivityResultContracts.RequestPermission()
     ) { granted = it }
 
-    var capturedPath by remember { mutableStateOf<String?>(null) }
     var captureError by remember { mutableStateOf<String?>(null) }
     var flashOn by remember { mutableStateOf(false) }
+    var capturing by remember { mutableStateOf(false) }
 
     val previewView = remember { PreviewView(context) }
     val imageCaptureRef = remember { arrayOfNulls<ImageCapture>(1) }
@@ -96,7 +92,7 @@ fun CameraScreen(onDone: () -> Unit) {
                         it.setSurfaceProvider(previewView.surfaceProvider)
                     }
                     val imageCapture = ImageCapture.Builder()
-                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                         .build()
                     imageCaptureRef[0] = imageCapture
                     provider.unbindAll()
@@ -118,7 +114,10 @@ fun CameraScreen(onDone: () -> Unit) {
     }
 
     fun takePicture() {
+        if (capturing) return
         val imageCapture = imageCaptureRef[0] ?: return
+        capturing = true
+        captureError = null
         imageCapture.flashMode = if (flashOn) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
         val file = PhotoStorage.newPhotoFile(context)
         val output = ImageCapture.OutputFileOptions.Builder(file).build()
@@ -127,22 +126,17 @@ fun CameraScreen(onDone: () -> Unit) {
             ContextCompat.getMainExecutor(context),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                    capturedPath = file.absolutePath
+                    capturing = false
+                    PhotoBus.deliverResult(file.absolutePath)
+                    onDone()
                 }
 
                 override fun onError(exception: ImageCaptureException) {
+                    capturing = false
                     captureError = "Error al capturar la fotografía"
                 }
             }
         )
-    }
-
-    fun confirmPhoto() {
-        val path = capturedPath
-        if (path != null) {
-            PhotoBus.deliverResult(path)
-            onDone()
-        }
     }
 
     BackHandler(onBack = onDone)
@@ -234,7 +228,7 @@ fun CameraScreen(onDone: () -> Unit) {
                 }
             }
 
-            capturedPath == null -> {
+            else -> {
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -253,15 +247,23 @@ fun CameraScreen(onDone: () -> Unit) {
                             .clip(CircleShape)
                             .background(Color.White)
                             .border(4.dp, Violeta, CircleShape)
-                            .clickable { takePicture() },
+                            .clickable(enabled = !capturing) { takePicture() },
                         contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(58.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFDDD9E8))
-                        )
+                        if (capturing) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(34.dp),
+                                color = Violeta,
+                                strokeWidth = 3.dp
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(58.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFDDD9E8))
+                            )
+                        }
                     }
                     IconButton(
                         onClick = { flashOn = !flashOn },
@@ -272,53 +274,6 @@ fun CameraScreen(onDone: () -> Unit) {
                             contentDescription = if (flashOn) "Apagar flash" else "Encender flash",
                             tint = if (flashOn) Color(0xFFFFD54F) else Color.White
                         )
-                    }
-                }
-            }
-
-            else -> {
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth(),
-                    color = Color(0xFF1A1A1E),
-                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        FilePathImage(
-                            path = capturedPath,
-                            modifier = Modifier
-                                .size(60.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                        )
-                        Spacer(Modifier.size(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "Fotografía capturada",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            TextButton(
-                                onClick = { capturedPath = null },
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                            ) {
-                                Text("Retomar foto", color = VioletaClaro, fontSize = 13.sp)
-                            }
-                        }
-                        Button(
-                            onClick = { confirmPhoto() },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Violeta)
-                        ) {
-                            Text("Usar foto", fontWeight = FontWeight.SemiBold)
-                        }
                     }
                 }
             }

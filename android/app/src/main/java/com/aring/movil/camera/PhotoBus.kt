@@ -35,6 +35,8 @@ object PhotoBus {
     const val CATEGORY_MEASUREMENT = "MEASUREMENT"
     const val CATEGORY_CHECKLIST = "CHECKLIST"
     const val CATEGORY_POST = "POST"
+    const val CATEGORY_REAPRIETE = "REAPRIETE"
+    const val CATEGORY_ASEO = "ASEO"
 
     val request = MutableStateFlow<PhotoRequest?>(null)
     val result = MutableStateFlow<PhotoResult?>(null)

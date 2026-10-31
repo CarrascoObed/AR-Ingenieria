@@ -121,6 +121,20 @@ public class SuperController {
                 .body(bytes);
     }
 
+    @GetMapping("/documentos-finalizadas.zip")
+    public ResponseEntity<byte[]> documentosFinalizadasZip(
+            @RequestParam int anio,
+            @RequestParam(required = false) Integer mes) {
+        byte[] bytes = documentoService.documentosFinalizadasZip(anio, mes);
+        String periodo = mes == null ? String.valueOf(anio) : String.format("%d-%02d", anio, mes);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"documentos-tareas-finalizadas-" + periodo + ".zip\"")
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .contentLength(bytes.length)
+                .body(bytes);
+    }
+
     private Instant inicioDelDia(String fecha) {
         if (fecha == null || fecha.isBlank()) {
             return null;

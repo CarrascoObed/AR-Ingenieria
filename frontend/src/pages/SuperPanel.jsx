@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   ClipboardList,
   Download,
+  FileSpreadsheet,
   FileText,
   KeyRound,
   Loader2,
@@ -39,74 +40,90 @@ function Interruptor({ activo, disabled, onChange }) {
   );
 }
 
-function FiltrosInforme({ filtro, setFiltro }) {
-  const actualizar = (campo) => (e) => setFiltro((f) => ({ ...f, [campo]: e.target.value }));
-  const actualizarId = (e) => setFiltro((f) => ({ ...f, idTarea: e.target.value.toUpperCase() }));
-  return (
-    <>
-      <div className="fila">
-        <div className="campo">
-          <label>ID de tarea</label>
-          <input value={filtro.idTarea} onChange={actualizarId} placeholder="Ej: M-0001" />
-        </div>
-        <div className="campo">
-          <label>Nombre técnico</label>
-          <input
-            value={filtro.nombreTecnico}
-            onChange={actualizar('nombreTecnico')}
-            placeholder="Ej: Juan"
-          />
-        </div>
-        <div className="campo">
-          <label>Nombre del recinto</label>
-          <input
-            value={filtro.nombreRecinto}
-            onChange={actualizar('nombreRecinto')}
-            placeholder="Ej: Edificio Central"
-          />
-        </div>
-      </div>
-      <div className="fila">
-        <div className="campo">
-          <label>Fecha desde</label>
-          <input type="date" value={filtro.fechaDesde} onChange={actualizar('fechaDesde')} />
-        </div>
-        <div className="campo">
-          <label>Fecha hasta</label>
-          <input type="date" value={filtro.fechaHasta} onChange={actualizar('fechaHasta')} />
-        </div>
-      </div>
-    </>
-  );
-}
-
 function SeccionInformes() {
-  const [filtro, setFiltro] = useState({
-    idTarea: '',
-    nombreTecnico: '',
-    nombreRecinto: '',
-    fechaDesde: '',
-    fechaHasta: '',
-  });
+  const [busquedaEdificio, setBusquedaEdificio] = useState('');
+  const [edificioSeleccionado, setEdificioSeleccionado] = useState('');
+  const [sugerencias, setSugerencias] = useState([]);
+  const [cargandoSugerencias, setCargandoSugerencias] = useState(false);
+  const [tareasEdificio, setTareasEdificio] = useState([]);
+  const [tareaSeleccionada, setTareaSeleccionada] = useState(null);
+  const [cargandoTareas, setCargandoTareas] = useState(false);
   const [error, setError] = useState('');
   const [descargando, setDescargando] = useState('');
 
-  const descargar = async (nombreArchivo) => {
-    setError('');
-    setDescargando(nombreArchivo);
-    try {
-      const params = {};
-      if (filtro.idTarea?.trim()) params.idTarea = filtro.idTarea.trim();
-      if (filtro.nombreTecnico?.trim()) params.nombreTecnico = filtro.nombreTecnico.trim();
-      if (filtro.nombreRecinto?.trim()) params.nombreRecinto = filtro.nombreRecinto.trim();
-      if (filtro.fechaDesde?.trim()) params.fechaDesde = filtro.fechaDesde.trim();
-      if (filtro.fechaHasta?.trim()) params.fechaHasta = filtro.fechaHasta.trim();
+  useEffect(() => {
+    const consulta = busquedaEdificio.trim();
+    if (consulta.length < 2 || edificioSeleccionado === consulta) {
+      setSugerencias([]);
+      setCargandoSugerencias(false);
+      return undefined;
+    }
 
-      const res = await api.get('/super/informe.docx', { params, responseType: 'blob' });
+    let cancelada = false;
+    const temporizador = window.setTimeout(async () => {
+      setCargandoSugerencias(true);
+      try {
+        const res = await api.get('/documentos/edificios/sugerencias', { params: { q: consulta } });
+        if (!cancelada) setSugerencias(res.data);
+      } catch (e) {
+        if (!cancelada) setError(mensajeError(e));
+      } finally {
+        if (!cancelada) setCargandoSugerencias(false);
+      }
+    }, 250);
+
+    return () => {
+      cancelada = true;
+      window.clearTimeout(temporizador);
+    };
+  }, [busquedaEdificio, edificioSeleccionado]);
+
+  const seleccionarEdificio = async (nombre) => {
+    const seleccionado = nombre.trim();
+    if (!seleccionado) return;
+    setBusquedaEdificio(seleccionado);
+    setEdificioSeleccionado(seleccionado);
+    setSugerencias([]);
+    setTareasEdificio([]);
+    setTareaSeleccionada(null);
+    setError('');
+    setCargandoTareas(true);
+    try {
+      const res = await api.get('/documentos/edificios/tareas', {
+        params: { nombre: seleccionado },
+      });
+      setTareasEdificio(res.data);
+    } catch (e) {
+      setError(mensajeError(e));
+    } finally {
+      setCargandoTareas(false);
+    }
+  };
+
+  const descargar = async (ruta, nombreAlternativo) => {
+    if (!tareaSeleccionada) return;
+    setError('');
+    setDescargando(ruta);
+    try {
+      const res = await api.get(ruta, {
+        params: { idTarea: tareaSeleccionada.codigo },
+        responseType: 'blob',
+      });
       const blobUrl = URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = nombreArchivo;
+      const disposition = res.headers['content-disposition'] || '';
+      const utf8 = disposition.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+      const simple = disposition.match(/filename\s*=\s*"?([^";]+)"?/i);
+      let nombre = simple?.[1]?.trim() || nombreAlternativo;
+      if (utf8) {
+        try {
+          nombre = decodeURIComponent(utf8[1].trim().replace(/^"|"$/g, ''));
+        } catch {
+          // Usa el nombre alternativo si el encabezado UTF-8 no es válido.
+        }
+      }
+      link.download = nombre;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -118,8 +135,11 @@ function SeccionInformes() {
     }
   };
 
-  const nombrePersonalizado = () =>
-    `informe-super-usuario${filtro.idTarea.trim() ? `-${filtro.idTarea.trim()}` : ''}.docx`;
+  const fechaTarea = (fecha) => fecha
+    ? new Intl.DateTimeFormat('es-CL', { dateStyle: 'long', timeZone: 'America/Santiago' }).format(new Date(fecha))
+    : 'Fecha no disponible';
+
+  const nombreAlternativo = (extension) => `${tareaSeleccionada?.codigo || 'informe'}${extension}`;
 
   return (
     <section className="tarjeta-documento">
@@ -127,29 +147,133 @@ function SeccionInformes() {
         <FileText size={18} style={{ verticalAlign: -3 }} color="var(--violeta)" /> Informes
       </h3>
       <p className="descripcion">
-        Descarga el informe en Word con el detalle de los tableros inspeccionados. Puedes descargar
-        el historial completo de todas las tareas o filtrar la descarga.
+        Busca el edificio, selecciona el mantenimiento finalizado y descarga su rendición en Excel o
+        el informe en Word.
       </p>
 
       {error && <div className="error-banner">{error}</div>}
 
-      <FiltrosInforme filtro={filtro} setFiltro={setFiltro} />
+      <div className="fila">
+        <div className="campo-sugerencias campo-busqueda-edificio">
+          <div className="campo">
+            <label htmlFor="buscar-edificio-super">Nombre del edificio</label>
+            <input
+              id="buscar-edificio-super"
+              value={busquedaEdificio}
+              onChange={(e) => {
+                setBusquedaEdificio(e.target.value);
+                setEdificioSeleccionado('');
+                setTareasEdificio([]);
+                setTareaSeleccionada(null);
+                setError('');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  seleccionarEdificio(busquedaEdificio);
+                }
+                if (e.key === 'Escape') setSugerencias([]);
+              }}
+              placeholder="Ej: Edificio Vicuña Urban"
+              autoComplete="off"
+              aria-autocomplete="list"
+              aria-controls="sugerencias-edificios-super"
+            />
+          </div>
+          {!edificioSeleccionado && busquedaEdificio.trim().length >= 2 && (
+            <div className="sugerencias" id="sugerencias-edificios-super" role="listbox">
+              {cargandoSugerencias ? (
+                <div className="sugerencias-vacias">Buscando edificios…</div>
+              ) : sugerencias.length ? (
+                sugerencias.map((nombre) => (
+                  <button
+                    className="sugerencia-item"
+                    key={nombre}
+                    type="button"
+                    role="option"
+                    aria-selected="false"
+                    onClick={() => seleccionarEdificio(nombre)}
+                  >
+                    <strong>{nombre}</strong>
+                    <span>Ver mantenimientos finalizados</span>
+                  </button>
+                ))
+              ) : (
+                <div className="sugerencias-vacias">
+                  No hay sugerencias. Presiona Enter para buscar este nombre.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {edificioSeleccionado && (
+        <div className="resultado-edificio">
+          <div className="resultado-edificio-cabecera">
+            <strong>{edificioSeleccionado}</strong>
+            <button
+              className="btn btn-secundario btn-chico"
+              type="button"
+              onClick={() => {
+                setEdificioSeleccionado('');
+                setBusquedaEdificio('');
+                setTareasEdificio([]);
+                setTareaSeleccionada(null);
+              }}
+            >
+              Cambiar edificio
+            </button>
+          </div>
+          {cargandoTareas ? (
+            <p className="descripcion">Cargando mantenimientos…</p>
+          ) : tareasEdificio.length ? (
+            <>
+              <p className="descripcion">Selecciona un mantenimiento para descargar sus archivos.</p>
+              <div className="lista-mantenimientos" role="radiogroup" aria-label="Mantenimientos del edificio">
+                {tareasEdificio.map((tarea) => (
+                  <label
+                    className={`mantenimiento-opcion${tareaSeleccionada?.id === tarea.id ? ' seleccionado' : ''}`}
+                    key={tarea.id}
+                  >
+                    <input
+                      type="radio"
+                      name="mantenimiento-super-seleccionado"
+                      value={tarea.id}
+                      checked={tareaSeleccionada?.id === tarea.id}
+                      onChange={() => setTareaSeleccionada(tarea)}
+                    />
+                    <span className="mantenimiento-detalle">
+                      <strong>{tarea.nombreRecinto}</strong>
+                      <span>{tarea.direccion}</span>
+                      <span>{fechaTarea(tarea.fecha)} · ID {tarea.codigo}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="descripcion">No hay mantenimientos finalizados con informes para este edificio.</p>
+          )}
+        </div>
+      )}
+
       <div className="fila-descarga">
         <button
-          className="btn btn-primario"
-          onClick={() => descargar('informe-super-usuario.docx')}
-          disabled={descargando === 'informe-super-usuario.docx'}
+          className="btn btn-secundario"
+          onClick={() => descargar('/documentos/finalizadas.xlsx', nombreAlternativo('.xlsx'))}
+          disabled={!tareaSeleccionada || descargando === '/documentos/finalizadas.xlsx'}
         >
-          <Download size={18} />
-          {descargando === 'informe-super-usuario.docx' ? 'Descargando…' : 'Descargar informe completo'}
+          <FileSpreadsheet size={18} />
+          {descargando === '/documentos/finalizadas.xlsx' ? 'Descargando…' : 'Descargar Rendición de servicios'}
         </button>
         <button
           className="btn btn-secundario"
-          onClick={() => descargar(nombrePersonalizado())}
-          disabled={descargando === nombrePersonalizado()}
+          onClick={() => descargar('/documentos/finalizadas.docx', nombreAlternativo('.docx'))}
+          disabled={!tareaSeleccionada || descargando === '/documentos/finalizadas.docx'}
         >
           <Download size={18} />
-          {descargando === nombrePersonalizado() ? 'Descargando…' : 'Descargar informe personalizado'}
+          {descargando === '/documentos/finalizadas.docx' ? 'Descargando…' : 'Descargar Informe'}
         </button>
       </div>
     </section>
@@ -164,12 +288,34 @@ function SeccionTareas() {
   const [borrarTodas, setBorrarTodas] = useState(false);
   const [tareaAEliminar, setTareaAEliminar] = useState(null);
   const [trabajando, setTrabajando] = useState(false);
+  const [anioDescarga, setAnioDescarga] = useState(String(new Date().getFullYear()));
+  const [mesDescarga, setMesDescarga] = useState('');
+  const [descargandoDocumentos, setDescargandoDocumentos] = useState(false);
+
+  const fechaPeriodo = (tarea) => tarea.fechaFin || tarea.fechaInicio || tarea.fechaCreacion;
+  const anioDeFecha = (fecha) => Number(new Intl.DateTimeFormat('en', {
+    year: 'numeric',
+    timeZone: 'America/Santiago',
+  }).format(new Date(fecha)));
+  const aniosDisponibles = [...new Set(
+    tareas
+      .filter((tarea) => tarea.estado === 'Finalizada' && fechaPeriodo(tarea))
+      .map((tarea) => anioDeFecha(fechaPeriodo(tarea)))
+  )].sort((a, b) => b - a);
 
   const cargar = async () => {
     setCargando(true);
     try {
       const res = await api.get('/tareas');
       setTareas(res.data);
+      const anios = [...new Set(
+        res.data
+          .filter((tarea) => tarea.estado === 'Finalizada' && (tarea.fechaFin || tarea.fechaInicio || tarea.fechaCreacion))
+          .map((tarea) => anioDeFecha(tarea.fechaFin || tarea.fechaInicio || tarea.fechaCreacion))
+      )].sort((a, b) => b - a);
+      if (anios.length) {
+        setAnioDescarga((actual) => anios.includes(Number(actual)) ? actual : String(anios[0]));
+      }
     } catch (e) {
       setError(mensajeError(e));
     } finally {
@@ -180,6 +326,33 @@ function SeccionTareas() {
   useEffect(() => {
     cargar();
   }, []);
+
+  const descargarDocumentosFinalizados = async () => {
+    setError('');
+    setOk('');
+    setDescargandoDocumentos(true);
+    try {
+      const params = { anio: Number(anioDescarga) };
+      if (mesDescarga) params.mes = Number(mesDescarga);
+      const res = await api.get('/super/documentos-finalizadas.zip', {
+        params,
+        responseType: 'blob',
+      });
+      const blobUrl = URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `documentos-tareas-finalizadas-${anioDescarga}${mesDescarga ? `-${mesDescarga.padStart(2, '0')}` : ''}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(blobUrl);
+      setOk('Se descargó el paquete de documentos de tareas finalizadas.');
+    } catch (e) {
+      setError(await mensajeErrorBlob(e));
+    } finally {
+      setDescargandoDocumentos(false);
+    }
+  };
 
   const eliminarTodas = async () => {
     setTrabajando(true);
@@ -225,6 +398,54 @@ function SeccionTareas() {
 
       {error && <div className="error-banner">{error}</div>}
       {ok && <div className="ok-banner">{ok}</div>}
+
+      <div className="seccion-formulario">
+        <h4>Descargar documentos de tareas finalizadas</h4>
+        <p className="descripcion">
+          Descarga un ZIP con la rendición Excel y el informe Word de cada tarea finalizada con
+          tableros registrados en el período seleccionado.
+        </p>
+        <div className="fila">
+          <div className="campo">
+            <label htmlFor="anio-documentos-finalizados">Año</label>
+            <select
+              id="anio-documentos-finalizados"
+              value={anioDescarga}
+              onChange={(e) => setAnioDescarga(e.target.value)}
+            >
+              {aniosDisponibles.length ? aniosDisponibles.map((anio) => (
+                <option key={anio} value={anio}>{anio}</option>
+              )) : <option value={anioDescarga}>{anioDescarga}</option>}
+            </select>
+          </div>
+          <div className="campo">
+            <label htmlFor="mes-documentos-finalizados">Mes</label>
+            <select
+              id="mes-documentos-finalizados"
+              value={mesDescarga}
+              onChange={(e) => setMesDescarga(e.target.value)}
+            >
+              <option value="">Todo el año</option>
+              {Array.from({ length: 12 }, (_, indice) => {
+                const mes = indice + 1;
+                const nombre = new Intl.DateTimeFormat('es-CL', { month: 'long' })
+                  .format(new Date(2026, indice, 1));
+                return <option key={mes} value={mes}>{nombre.charAt(0).toUpperCase() + nombre.slice(1)}</option>;
+              })}
+            </select>
+          </div>
+        </div>
+        <div className="fila-descarga">
+          <button
+            className="btn btn-secundario"
+            onClick={descargarDocumentosFinalizados}
+            disabled={descargandoDocumentos || !anioDescarga}
+          >
+            <Download size={18} />
+            {descargandoDocumentos ? 'Preparando documentos…' : 'Descargar documentos (ZIP)'}
+          </button>
+        </div>
+      </div>
 
       <div className="fila-descarga">
         <button className="btn btn-riesgo" onClick={() => setBorrarTodas(true)}>

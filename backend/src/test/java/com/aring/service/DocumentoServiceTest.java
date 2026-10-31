@@ -2,6 +2,7 @@ package com.aring.service;
 
 import com.aring.exception.ApiException;
 import com.aring.model.ChecklistTablero;
+import com.aring.model.Cliente;
 import com.aring.model.EstadoTarea;
 import com.aring.model.ImagenTablero;
 import com.aring.model.InformeTablero;
@@ -107,17 +108,34 @@ class DocumentoServiceTest {
         informe.getImagenes().add(img);
 
         MedicionTablero med = new MedicionTablero();
+        med.setVariableId("mono_tension");
         med.setLabel("Tensión fase A");
         med.setUnit("V");
         med.setValor("220");
         med.setFotoBase64(fotoBase64());
         informe.getMediciones().add(med);
 
+        MedicionTablero termo = new MedicionTablero();
+        termo.setVariableId("mono_termografia");
+        termo.setLabel("Termografía");
+        termo.setUnit("°C");
+        termo.setValor("35");
+        termo.setFotoBase64(fotoBase64());
+        informe.getMediciones().add(termo);
+
         ChecklistTablero check = new ChecklistTablero();
+        check.setItemId("mono_c2");
         check.setLabel("Borne principal");
         check.setStatus("OK");
         check.setFotoBase64(fotoBase64());
         informe.getChecklist().add(check);
+
+        ChecklistTablero checkTermo = new ChecklistTablero();
+        checkTermo.setItemId("mono_c9");
+        checkTermo.setLabel("Termografía");
+        checkTermo.setStatus("C");
+        checkTermo.setFotoBase64(fotoBase64());
+        informe.getChecklist().add(checkTermo);
 
         when(informeTableroRepository.findAllByTareaIdOrderByIdAsc(anyLong()))
                 .thenReturn(List.of(informe));
@@ -163,7 +181,7 @@ class DocumentoServiceTest {
     }
 
     @Test
-    void finalizadasWordGeneraInformePorTablero() {
+    void finalizadasWordGeneraInformeConEstructuraPlantilla() {
         when(tareaRepository.findAll(any(Specification.class), any(Sort.class))).thenReturn(tareas);
         configurarTableros();
 
@@ -171,28 +189,76 @@ class DocumentoServiceTest {
 
         assertZip(bytes);
         String documentXml = contenidoDe(bytes, "word/document.xml");
-        assertTrue(documentXml.contains("Informe de Mantenimiento"));
-        assertTrue(documentXml.contains("Responsable Mantenimiento"));
-        assertTrue(documentXml.contains("Fecha Inicio"));
-        assertTrue(documentXml.contains("Fecha termino"));
-        assertTrue(documentXml.contains("Detalles de revisión tablero eléctrico"));
-        assertTrue(documentXml.contains("Se realiza procedimiento de mantenimiento eléctrico en tablero de distribución,"));
-        assertTrue(documentXml.contains("efectuando inspección visual de sus componentes, partes eléctricas, protecciones y puntos de conexión."));
-        assertTrue(documentXml.contains("Se verifica el estado general de los componentes, equipos y terminales,"));
-        assertTrue(documentXml.contains("realizando las pruebas correspondientes de continuidad y resistencia de aislación."));
-        assertTrue(documentXml.contains("Se detectan las siguientes observaciones en los tableros:"));
-        assertTrue(documentXml.contains("Respaldo tablero eléctrico"));
+        assertTrue(documentXml.contains("Informe de mantenimiento preventivo eléctrico"),
+                "La portada debe tener el título de la plantilla");
+        assertTrue(documentXml.contains("Declaración de Confidencialidad"));
+        assertTrue(documentXml.contains("1. Introducción."));
+        assertTrue(documentXml.contains("2. Objetivos del Mantenimiento."));
+        assertTrue(documentXml.contains("3.1 Instrumentación para el servicio"));
+        assertTrue(documentXml.contains("3.2 Procedimiento de mantenimiento."));
+        assertTrue(documentXml.contains("3.3 Pautas de revisión para tableros (captura de datos tipo Check list)"));
+        assertTrue(documentXml.contains("4. Levantamiento, valorización y condiciones de pago."));
+        assertTrue(documentXml.contains("5. Respaldo fotográfico de servicio realizado."));
+        assertTrue(documentXml.contains("6. Respaldo fotográfico termografía"));
+        assertTrue(documentXml.contains("7. Resumen de mantenimiento y observaciones."));
+        assertTrue(documentXml.contains("8. Agradecimientos."));
+
+        // Sección 3.3 agrupada por tablero con su información real
+        assertTrue(documentXml.contains("Tablero: Tablero principal - Pasillo A - Piso 3"));
+        assertTrue(documentXml.contains("Carlos Soto"),
+                "El responsable de mantenimiento debe ser el técnico que realizó el tablero");
         assertTrue(documentXml.contains("Fusible de 10A dañado."));
         assertTrue(documentXml.contains("Se recomienda reemplazo."));
         assertTrue(documentXml.contains("Monofásico"));
         assertTrue(documentXml.contains("No Aplica"),
                 "Para tableros monofásicos el tamaño debe mostrar No Aplica");
-        assertTrue(documentXml.contains("Carlos Soto"),
-                "El responsable de mantenimiento debe ser el técnico que realizó el tablero");
-        assertFalse(documentXml.contains("Juan Pérez"),
-                "El responsable no debe ser el técnico de cabecera por defecto");
+
+        // Pies de contexto para las fotos
+        assertTrue(documentXml.contains("Tablero principal - Pasillo A - Piso 3 - Evidencia previa"),
+                "Las fotos previas/posteriores deben presentarse en 3.3 con pie");
+        assertTrue(documentXml.contains("Medición Tensión fase A"),
+                "Las fotos de mediciones deben presentarse en 5 con pie");
+        assertTrue(documentXml.contains("Evidencia checklist: Borne principal"),
+                "Las evidencias de checklist deben presentarse en 5 con pie");
         assertTrue(documentXml.contains("wp:extent"),
                 "Las imágenes deben incrustarse con un tamaño real en EMU");
+    }
+
+    @Test
+    void finalizadasWordGeneraTermografiaEnSeccionSeis() {
+        when(tareaRepository.findAll(any(Specification.class), any(Sort.class))).thenReturn(tareas);
+        configurarTableros();
+
+        byte[] bytes = documentoService.finalizadasWord(null, null, null);
+
+        String documentXml = contenidoDe(bytes, "word/document.xml");
+        // Las fotos termográficas (medición mono_termografia y checklist mono_c9 "Termografía")
+        // se presentan en la sección 6, identificadas con tablero y contexto.
+        assertTrue(documentXml.contains("Piso 3 - Termografía (35 °C)"),
+                "La foto de la medición de termografía debe ir en la sección 6 con su contexto");
+        assertTrue(documentXml.contains("Evidencia checklist: Termografía"),
+                "La evidencia del checklist de termografía debe ir en la sección 6");
+        // En la sección 5 no deben aparecer como "Medición Termografía" (la clasificación es por metadatos).
+        assertFalse(documentXml.contains("Medición Termografía"));
+    }
+
+    @Test
+    void finalizadasWordNoIncluyeCobrosNiEspacioReservado() {
+        when(tareaRepository.findAll(any(Specification.class), any(Sort.class))).thenReturn(tareas);
+        configurarTableros();
+
+        byte[] bytes = documentoService.finalizadasWord(null, null, null);
+
+        String documentXml = contenidoDe(bytes, "word/document.xml");
+        int inicioSeccion4 = documentXml.indexOf("4. Levantamiento, valorización y condiciones de pago.");
+        int finSeccion4 = documentXml.indexOf("5. Respaldo fotográfico de servicio realizado.");
+        assertTrue(inicioSeccion4 >= 0 && finSeccion4 > inicioSeccion4,
+                "La sección 4 debe existir y la 5 debe ir después");
+        String contenidoSeccion4 = documentXml.substring(inicioSeccion4, finSeccion4);
+        assertFalse(contenidoSeccion4.contains("wp:extent"),
+                "La sección 4 no debe insertar ninguna imagen de cobros/valorización");
+        assertFalse(contenidoSeccion4.contains("w:tbl>"),
+                "La sección 4 no debe dejar espacios de tabla vacíos");
     }
 
     @Test
@@ -220,14 +286,56 @@ class DocumentoServiceTest {
 
         assertZip(bytes);
         String documentXml = contenidoDe(bytes, "word/document.xml");
-        assertEquals(1, contarOcurrencias(documentXml, "Informe de Mantenimiento"),
-                "El título del informe debe aparecer una sola vez por tarea");
+        assertEquals(1, contarOcurrencias(documentXml, "Informe de mantenimiento preventivo eléctrico"),
+                "La portada debe aparecer una sola vez por tarea");
         assertEquals(1, contarOcurrencias(documentXml, "Tarea M-0001"),
-                "El subtítulo con el código de la tarea debe aparecer una sola vez");
+                "La tarea debe identificarse una sola vez");
         assertTrue(documentXml.contains("Tablero: Tablero principal - Pasillo A - Piso 3"),
-                "El título del primer tablero debe mostrar descripción, ubicación y piso");
+                "El primer tablero debe mostrar descripción, ubicación y piso");
         assertTrue(documentXml.contains("Tablero: Tablero secundario - Pasillo B - Piso 2"),
-                "El título del segundo tablero debe mostrar descripción, ubicación y piso");
+                "El segundo tablero debe mostrar descripción, ubicación y piso");
+    }
+
+    @Test
+    void finalizadasWordPortadaUsaDatosDelCliente() {
+        when(tareaRepository.findAll(any(Specification.class), any(Sort.class))).thenReturn(tareas);
+        configurarTableros();
+
+        Cliente cliente = new Cliente();
+        cliente.setId(5L);
+        cliente.setNombreRecinto("Edificio Costanera");
+        cliente.setDireccion("Av. Costanera 480, Santiago");
+        cliente.setImagenBase64(fotoBase64());
+        tareas.get(0).setCliente(cliente);
+
+        byte[] bytes = documentoService.finalizadasWord(null, null, null);
+
+        String documentXml = contenidoDe(bytes, "word/document.xml");
+        assertTrue(documentXml.contains("Edificio Costanera"),
+                "La portada debe usar el nombre del recinto del Cliente asociado");
+        assertTrue(documentXml.contains("Av. Costanera 480, Santiago"),
+                "La portada debe usar la dirección del Cliente asociado");
+        assertTrue(documentXml.contains("Elaborado por Juan Pérez"),
+                "La portada debe indicar al técnico de cabecera");
+        assertTrue(documentXml.contains("Agosto del 2026"),
+                "La portada debe mostrar el mes y año reales del mantenimiento");
+        assertTrue(documentXml.contains("Santiago, agosto 2026"),
+                "La portada debe cerrar con ciudad y mes del servicio");
+    }
+
+    @Test
+    void finalizadasWordTareaSinClienteUsaDatosDeTarea() {
+        when(tareaRepository.findAll(any(Specification.class), any(Sort.class))).thenReturn(tareas);
+        configurarTableros();
+
+        byte[] bytes = documentoService.finalizadasWord(null, null, null);
+
+        String documentXml = contenidoDe(bytes, "word/document.xml");
+        assertTrue(documentXml.contains("Edificio Central"),
+                "Sin Cliente, la portada debe usar los datos de la tarea");
+        assertTrue(documentXml.contains("Av. Siempre Viva 123"));
+        assertFalse(documentXml.contains("null"),
+                "El documento no debe contener valores nulos");
     }
 
     @Test
@@ -282,11 +390,9 @@ class DocumentoServiceTest {
 
         assertZip(bytes);
         String documentXml = contenidoDe(bytes, "word/document.xml");
-        assertTrue(documentXml.contains("Informe de Mantenimiento"));
+        assertTrue(documentXml.contains("Informe de mantenimiento preventivo eléctrico"));
         assertTrue(documentXml.contains("Tarea M-0001"));
-        assertTrue(documentXml.contains("Detalles de revisión tablero eléctrico"));
-        assertTrue(documentXml.contains("Se detectan las siguientes observaciones en los tableros:"));
-        assertTrue(documentXml.contains("Respaldo tablero eléctrico"));
+        assertTrue(documentXml.contains("3.3 Pautas de revisión para tableros (captura de datos tipo Check list)"));
         assertTrue(documentXml.contains("Fusible de 10A dañado."));
     }
 

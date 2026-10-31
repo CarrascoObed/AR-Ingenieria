@@ -1,12 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, ShieldCheck } from 'lucide-react';
-import SuperLayout from '../ui/SuperLayout';
 
 export default function SuperInicio() {
   const navigate = useNavigate();
 
   return (
-    <SuperLayout>
+    <>
       <h1 className="titulo-pagina">Panel del Super Usuario</h1>
       <p className="subtitulo-pagina">
         Selecciona el modo en el que deseas trabajar.
@@ -33,6 +32,6 @@ export default function SuperInicio() {
           </span>
         </button>
       </div>
-    </SuperLayout>
+    </>
   );
 }

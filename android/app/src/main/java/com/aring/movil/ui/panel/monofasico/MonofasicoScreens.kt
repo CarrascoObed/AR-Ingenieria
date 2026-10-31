@@ -10,15 +10,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.input.KeyboardType
 import com.aring.movil.camera.OpenCamera
 import com.aring.movil.camera.PhotoBus
-import com.aring.movil.data.panel.label
-import com.aring.movil.data.panel.optionSelFromLabel
 import com.aring.movil.ui.panel.common.ChecklistCard
 import com.aring.movil.ui.panel.common.CollectPhotoResult
 import com.aring.movil.ui.panel.common.ErrorBanner
 import com.aring.movil.ui.panel.common.FormTextField
 import com.aring.movil.ui.panel.common.MeasurementCard
 import com.aring.movil.ui.panel.common.ObservacionesSection
-import com.aring.movil.ui.panel.common.OptionSelector
 import com.aring.movil.ui.panel.common.PhaseScreen
 import com.aring.movil.ui.panel.common.PhotoSlotCard
 import com.aring.movil.ui.panel.common.PhotoViewerDialog
@@ -98,6 +95,9 @@ fun MonofasicoEvidenciasPreviasScreen(
                     onViewPhoto = { slot.path?.let { viewPhotoPath = it } },
                     onRetakePhoto = {
                         openCamera(2, PhotoBus.CATEGORY_PREVIOUS, null, slot.index, "Evidencia previa ${slot.index}")
+                    },
+                    onPhotoEdited = { nuevaRuta ->
+                        vm.setPreviousPhoto(slot.index, nuevaRuta)
                     }
                 )
                 Spacing12()
@@ -127,8 +127,11 @@ fun MonofasicoVariablesScreen(
     var viewPhotoPath by remember { mutableStateOf<String?>(null) }
 
     CollectPhotoResult { res ->
-        if (res.request.category == PhotoBus.CATEGORY_MEASUREMENT) {
-            res.request.referenceId?.let { vm.setMeasurementPhoto(it, res.filePath) }
+        when (res.request.category) {
+            PhotoBus.CATEGORY_MEASUREMENT ->
+                res.request.referenceId?.let { vm.setMeasurementPhoto(it, res.filePath) }
+            PhotoBus.CATEGORY_REAPRIETE -> vm.setReaprietePhoto(res.filePath)
+            PhotoBus.CATEGORY_ASEO -> vm.setAseoPhoto(res.filePath)
         }
     }
 
@@ -154,23 +157,40 @@ fun MonofasicoVariablesScreen(
                     onRetakePhoto = {
                         openCamera(3, PhotoBus.CATEGORY_MEASUREMENT, measurement.variableId, -1, measurement.label)
                     },
+                    onPhotoEdited = { nuevaRuta ->
+                        vm.setMeasurementPhoto(measurement.variableId, nuevaRuta)
+                    },
                     showValueInput = false
                 )
                 Spacing12()
             }
             Spacing8()
-            OptionSelector(
+            PhotoSlotCard(
                 title = "Reapriete",
-                options = listOf("Sí", "No", "N/A"),
-                selected = state.reapriete?.label(),
-                onSelect = { label -> optionSelFromLabel(label)?.let { vm.setReapriete(it) } }
+                subtitle = "Obligatoria",
+                path = state.reaprietePhoto,
+                onTakePhoto = {
+                    openCamera(3, PhotoBus.CATEGORY_REAPRIETE, null, -1, "Reapriete")
+                },
+                onViewPhoto = { state.reaprietePhoto?.let { viewPhotoPath = it } },
+                onRetakePhoto = {
+                    openCamera(3, PhotoBus.CATEGORY_REAPRIETE, null, -1, "Reapriete")
+                },
+                onPhotoEdited = { vm.setReaprietePhoto(it) }
             )
-            Spacing16()
-            OptionSelector(
+            Spacing12()
+            PhotoSlotCard(
                 title = "Aseo",
-                options = listOf("Sí", "No", "N/A"),
-                selected = state.aseo?.label(),
-                onSelect = { label -> optionSelFromLabel(label)?.let { vm.setAseo(it) } }
+                subtitle = "Obligatoria",
+                path = state.aseoPhoto,
+                onTakePhoto = {
+                    openCamera(3, PhotoBus.CATEGORY_ASEO, null, -1, "Aseo")
+                },
+                onViewPhoto = { state.aseoPhoto?.let { viewPhotoPath = it } },
+                onRetakePhoto = {
+                    openCamera(3, PhotoBus.CATEGORY_ASEO, null, -1, "Aseo")
+                },
+                onPhotoEdited = { vm.setAseoPhoto(it) }
             )
             Spacing16()
             ErrorBanner(error)
@@ -223,6 +243,9 @@ fun MonofasicoChecklistScreen(
                     onViewPhoto = { item.photoPath?.let { viewPhotoPath = it } },
                     onRetakePhoto = {
                         openCamera(4, PhotoBus.CATEGORY_CHECKLIST, item.itemId, -1, item.label)
+                    },
+                    onPhotoEdited = { nuevaRuta ->
+                        vm.setChecklistPhoto(item.itemId, nuevaRuta)
                     }
                 )
                 Spacing12()
@@ -277,6 +300,9 @@ fun MonofasicoEvidenciasPosterioresScreen(
                     onViewPhoto = { slot.path?.let { viewPhotoPath = it } },
                     onRetakePhoto = {
                         openCamera(5, PhotoBus.CATEGORY_POST, null, slot.index, "Evidencia posterior ${slot.index}")
+                    },
+                    onPhotoEdited = { nuevaRuta ->
+                        vm.setPostPhoto(slot.index, nuevaRuta)
                     }
                 )
                 Spacing12()

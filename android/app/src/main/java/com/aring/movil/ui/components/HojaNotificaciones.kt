@@ -18,6 +18,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +41,12 @@ fun HojaNotificaciones(onCerrar: () -> Unit) {
     val scope = rememberCoroutineScope()
     val notifs = Repositorio.notificaciones
     val noLeidas = notifs.count { !it.leida }
+
+    LaunchedEffect(Unit) {
+        if (notifs.any { !it.leida }) {
+            runCatching { Repositorio.marcarTodasLeidas() }
+        }
+    }
 
     ModalBottomSheet(onDismissRequest = onCerrar) {
         Column(Modifier.fillMaxWidth()) {
@@ -127,6 +134,12 @@ fun HojaNotificacionesTecnico(
     val notifs = Repositorio.notificacionesDeTecnico(tecnicoId)
     val tareas = Repositorio.tareasDeTecnico(tecnicoId)
     val hayNoLeidas = notifs.any { !it.leida }
+
+    LaunchedEffect(tecnicoId) {
+        if (notifs.any { !it.leida }) {
+            runCatching { Repositorio.marcarTodasLeidasTecnico(tecnicoId) }
+        }
+    }
 
     ModalBottomSheet(onDismissRequest = onCerrar) {
         Column(Modifier.fillMaxWidth()) {

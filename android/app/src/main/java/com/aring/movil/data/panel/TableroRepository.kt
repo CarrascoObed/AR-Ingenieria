@@ -9,22 +9,18 @@ object TableroRepository {
     fun buildTrifasico(tareaId: Int, tecnicoId: Int, st: TrifasicoState): JSONObject {
         val root = base(tareaId, tecnicoId, TYPE_TRIFASICO, st.registration.descripcion, st.registration.ubicacion, st.registration.nivel)
         root.put("tamanioTablero", st.registration.tamanioTablero)
-        root.put("reapriete", st.reapriete?.name)
-        root.put("aseo", st.aseo?.name)
         root.put("mediciones", medicionesTrifasicas(st.measurements))
         root.put("checklist", checklistTrifasico(st.checklist))
-        root.put("imagenes", imagenes(st.previousPhotos, st.postPhotos))
+        root.put("imagenes", imagenes(st.previousPhotos, st.postPhotos, st.reaprietePhoto, st.aseoPhoto))
         root.put("observaciones", strings(st.observations))
         return root
     }
 
     fun buildMonofasico(tareaId: Int, tecnicoId: Int, st: MonofasicoState): JSONObject {
         val root = base(tareaId, tecnicoId, TYPE_MONOFASICO, st.registration.descripcion, st.registration.ubicacion, st.registration.nivel)
-        root.put("reapriete", st.reapriete?.name)
-        root.put("aseo", st.aseo?.name)
         root.put("mediciones", medicionesMonofasicas(st.measurements))
         root.put("checklist", checklistMonofasico(st.checklist))
-        root.put("imagenes", imagenes(st.previousPhotos, st.postPhotos))
+        root.put("imagenes", imagenes(st.previousPhotos, st.postPhotos, st.reaprietePhoto, st.aseoPhoto))
         root.put("observaciones", strings(st.observations))
         return root
     }
@@ -101,7 +97,12 @@ object TableroRepository {
         return arr
     }
 
-    private fun imagenes(previas: List<PhotoSlot>, posteriores: List<PhotoSlot>): JSONArray {
+    private fun imagenes(
+        previas: List<PhotoSlot>,
+        posteriores: List<PhotoSlot>,
+        reapriete: String?,
+        aseo: String?
+    ): JSONArray {
         val arr = JSONArray()
         previas.forEach { slot ->
             ApiService.fotoBase64(slot.path)?.let { base64 ->
@@ -118,6 +119,18 @@ object TableroRepository {
                     .put("indice", slot.index)
                     .put("base64", base64))
             }
+        }
+        ApiService.fotoBase64(reapriete)?.let { base64 ->
+            arr.put(JSONObject()
+                .put("categoria", "REAPRIETE")
+                .put("indice", 1)
+                .put("base64", base64))
+        }
+        ApiService.fotoBase64(aseo)?.let { base64 ->
+            arr.put(JSONObject()
+                .put("categoria", "ASEO")
+                .put("indice", 1)
+                .put("base64", base64))
         }
         return arr
     }

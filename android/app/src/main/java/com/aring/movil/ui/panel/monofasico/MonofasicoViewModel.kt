@@ -3,7 +3,6 @@ package com.aring.movil.ui.panel.monofasico
 import com.aring.movil.data.panel.ChecklistStatus
 import com.aring.movil.data.panel.MonofasicoState
 import com.aring.movil.data.panel.MonofasicoValidation
-import com.aring.movil.data.panel.OptionSel
 import com.aring.movil.data.panel.TableroDraftStore
 import com.aring.movil.data.panel.ValidationResult
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,9 +64,9 @@ class MonofasicoViewModel(private val tareaId: Int) {
             )
         }
 
-    fun setReapriete(value: OptionSel) = cambiar { it.copy(reapriete = value) }
+    fun setReaprietePhoto(path: String) = cambiar { it.copy(reaprietePhoto = path) }
 
-    fun setAseo(value: OptionSel) = cambiar { it.copy(aseo = value) }
+    fun setAseoPhoto(path: String) = cambiar { it.copy(aseoPhoto = path) }
 
     fun setChecklistStatus(itemId: String, status: ChecklistStatus) =
         cambiar { st ->

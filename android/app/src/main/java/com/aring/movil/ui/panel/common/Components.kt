@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Replay
@@ -451,8 +452,10 @@ private fun PhotoSection(
     photoPath: String?,
     onTakePhoto: () -> Unit,
     onViewPhoto: () -> Unit,
-    onRetakePhoto: () -> Unit
+    onRetakePhoto: () -> Unit,
+    onPhotoEdited: (String) -> Unit
 ) {
+    var anotando by remember { mutableStateOf(false) }
     if (photoPath == null) {
         OutlinedButton(
             onClick = onTakePhoto,
@@ -495,9 +498,27 @@ private fun PhotoSection(
                         Spacer(Modifier.width(4.dp))
                         Text("Retomar foto", color = Violeta, fontSize = 13.sp)
                     }
+                    TextButton(onClick = { anotando = true }, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                        Icon(
+                            Icons.Rounded.Edit,
+                            contentDescription = "Dibujar sobre la foto",
+                            tint = Violeta,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }
+    }
+    if (anotando && photoPath != null) {
+        AnotadorFotoDialog(
+            path = photoPath,
+            onConfirm = { nuevaRuta ->
+                anotando = false
+                onPhotoEdited(nuevaRuta)
+            },
+            onDismiss = { anotando = false }
+        )
     }
 }
 
@@ -539,6 +560,7 @@ fun MeasurementCard(
     onTakePhoto: () -> Unit,
     onViewPhoto: () -> Unit,
     onRetakePhoto: () -> Unit,
+    onPhotoEdited: (String) -> Unit,
     showValueInput: Boolean = true,
     showError: Boolean = false,
     modifier: Modifier = Modifier
@@ -594,7 +616,7 @@ fun MeasurementCard(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            PhotoSection(photoPath, onTakePhoto, onViewPhoto, onRetakePhoto)
+            PhotoSection(photoPath, onTakePhoto, onViewPhoto, onRetakePhoto, onPhotoEdited)
         }
     }
 }
@@ -608,6 +630,7 @@ fun ChecklistCard(
     onTakePhoto: () -> Unit,
     onViewPhoto: () -> Unit,
     onRetakePhoto: () -> Unit,
+    onPhotoEdited: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -660,47 +683,10 @@ fun ChecklistCard(
                     )
                 }
                 Spacer(Modifier.height(10.dp))
-                PhotoSection(photoPath, onTakePhoto, onViewPhoto, onRetakePhoto)
+                PhotoSection(photoPath, onTakePhoto, onViewPhoto, onRetakePhoto, onPhotoEdited)
             } else if (status == ChecklistStatus.CR) {
                 Spacer(Modifier.height(10.dp))
-                PhotoSection(photoPath, onTakePhoto, onViewPhoto, onRetakePhoto)
-            }
-        }
-    }
-}
-
-@Composable
-fun OptionSelector(
-    title: String,
-    options: List<String>,
-    selected: String?,
-    onSelect: (String) -> Unit
-) {
-    Column {
-        Text(title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = TextoOscuro)
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            options.forEach { option ->
-                val isSelected = selected == option
-                FilterChip(
-                    selected = isSelected,
-                    onClick = { onSelect(option) },
-                    label = {
-                        Text(option, fontSize = 14.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
-                    },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = Violeta,
-                        selectedLabelColor = Color.White,
-                        containerColor = Color(0xFFF1F0F7),
-                        labelColor = TextoOscuro
-                    ),
-                    border = FilterChipDefaults.filterChipBorder(
-                        enabled = true,
-                        selected = isSelected,
-                        borderColor = Color.Transparent,
-                        selectedBorderColor = Violeta
-                    )
-                )
+                PhotoSection(photoPath, onTakePhoto, onViewPhoto, onRetakePhoto, onPhotoEdited)
             }
         }
     }
@@ -714,6 +700,7 @@ fun PhotoSlotCard(
     onTakePhoto: () -> Unit,
     onViewPhoto: () -> Unit,
     onRetakePhoto: () -> Unit,
+    onPhotoEdited: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -742,7 +729,7 @@ fun PhotoSlotCard(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            PhotoSection(path, onTakePhoto, onViewPhoto, onRetakePhoto)
+            PhotoSection(path, onTakePhoto, onViewPhoto, onRetakePhoto, onPhotoEdited)
         }
     }
 }

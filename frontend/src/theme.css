@@ -979,6 +979,73 @@ input, select, textarea {
   margin-top: 6px;
 }
 
+.campo-busqueda-edificio {
+  flex: 1;
+  max-width: 560px;
+}
+
+.campo-busqueda-edificio .campo {
+  max-width: none;
+  margin-bottom: 0;
+}
+
+.resultado-edificio {
+  width: min(100%, 760px);
+  margin: 18px auto;
+  text-align: left;
+}
+
+.resultado-edificio-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: var(--texto-oscuro);
+}
+
+.lista-mantenimientos {
+  display: grid;
+  gap: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.mantenimiento-opcion {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--borde-suave);
+  border-radius: 12px;
+  background: var(--blanco);
+  cursor: pointer;
+  text-align: left;
+}
+
+.mantenimiento-opcion:hover,
+.mantenimiento-opcion.seleccionado {
+  border-color: var(--violeta);
+  background: var(--violeta-claro);
+}
+
+.mantenimiento-opcion input {
+  margin-top: 3px;
+  accent-color: var(--violeta);
+}
+
+.mantenimiento-detalle {
+  display: grid;
+  gap: 3px;
+  color: var(--texto-gris);
+  font-size: 13px;
+}
+
+.mantenimiento-detalle strong {
+  color: var(--texto-oscuro);
+  font-size: 14px;
+}
+
 /* ---------- Animaciones ---------- */
 @keyframes pulse {
   0%, 100% { opacity: 1; }

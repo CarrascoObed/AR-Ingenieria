@@ -28,8 +28,8 @@ data class TrifasicoState(
     val previousPhotos: List<PhotoSlot> = listOf(PhotoSlot(1), PhotoSlot(2)),
     val measurements: List<TrifasicoMeasurement> = TrifasicoConfig.variables
         .map { TrifasicoMeasurement(it.id, it.label, it.unit) },
-    val reapriete: OptionSel? = null,
-    val aseo: OptionSel? = null,
+    val reaprietePhoto: String? = null,
+    val aseoPhoto: String? = null,
     val checklist: List<TrifasicoChecklistItem> = TrifasicoConfig.checklist
         .map { TrifasicoChecklistItem(it.id, it.label) },
     val postPhotos: List<PhotoSlot> = listOf(PhotoSlot(1), PhotoSlot(2)),

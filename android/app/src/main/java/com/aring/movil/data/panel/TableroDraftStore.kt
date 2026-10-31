@@ -84,8 +84,8 @@ object TableroDraftStore {
         o.put("nivel", st.registration.nivel)
         o.put("tamanioTablero", st.registration.tamanioTablero)
         o.put("observations", observacionesJson(st.observations))
-        o.put("reapriete", st.reapriete?.name)
-        o.put("aseo", st.aseo?.name)
+        o.put("reaprieteFoto", st.reaprietePhoto.orEmpty())
+        o.put("aseoFoto", st.aseoPhoto.orEmpty())
         o.put("previousPhotos", fotosJson(st.previousPhotos))
         o.put("mediciones", medicionesJson(st.measurements.map { Triple(it.variableId, it.value, it.photoPath) }))
         o.put("checklist", checklistJson(st.checklist.map { Triple(it.itemId, it.status, it.photoPath) }))
@@ -99,8 +99,8 @@ object TableroDraftStore {
         o.put("ubicacion", st.registration.ubicacion)
         o.put("nivel", st.registration.nivel)
         o.put("observations", observacionesJson(st.observations))
-        o.put("reapriete", st.reapriete?.name)
-        o.put("aseo", st.aseo?.name)
+        o.put("reaprieteFoto", st.reaprietePhoto.orEmpty())
+        o.put("aseoFoto", st.aseoPhoto.orEmpty())
         o.put("previousPhotos", fotosJson(st.previousPhotos))
         o.put("mediciones", medicionesJson(st.measurements.map { Triple(it.variableId, it.value, it.photoPath) }))
         o.put("checklist", checklistJson(st.checklist.map { Triple(it.itemId, it.status, it.photoPath) }))
@@ -146,8 +146,8 @@ object TableroDraftStore {
                 val d = mediciones[m.variableId]
                 m.copy(value = d?.first ?: "", photoPath = d?.second)
             },
-            reapriete = runCatching { OptionSel.valueOf(o.optString("reapriete")) }.getOrNull(),
-            aseo = runCatching { OptionSel.valueOf(o.optString("aseo")) }.getOrNull(),
+            reaprietePhoto = o.optString("reaprieteFoto").ifEmpty { null },
+            aseoPhoto = o.optString("aseoFoto").ifEmpty { null },
             checklist = base.checklist.map { c ->
                 val d = checklist[c.itemId]
                 c.copy(status = d?.first, photoPath = d?.second)
@@ -172,8 +172,8 @@ object TableroDraftStore {
                 val d = mediciones[m.variableId]
                 m.copy(value = d?.first ?: "", photoPath = d?.second)
             },
-            reapriete = runCatching { OptionSel.valueOf(o.optString("reapriete")) }.getOrNull(),
-            aseo = runCatching { OptionSel.valueOf(o.optString("aseo")) }.getOrNull(),
+            reaprietePhoto = o.optString("reaprieteFoto").ifEmpty { null },
+            aseoPhoto = o.optString("aseoFoto").ifEmpty { null },
             checklist = base.checklist.map { c ->
                 val d = checklist[c.itemId]
                 c.copy(status = d?.first, photoPath = d?.second)

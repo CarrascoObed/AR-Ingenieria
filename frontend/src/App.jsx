@@ -12,12 +12,12 @@ import Documentos from './pages/Documentos';
 import SuperInicio from './pages/SuperInicio';
 import SuperPanel from './pages/SuperPanel';
 
-function Layout({ base = '/' }) {
+function Layout({ base = '/', mostrarMenu = true }) {
   return (
     <>
       <TopBar />
       <div className="layout">
-        <Sidebar base={base} />
+        {mostrarMenu && <Sidebar base={base} />}
         <main className="contenido">
           <Outlet />
         </main>
@@ -64,11 +64,14 @@ function Home() {
 }
 
 function AppRoutes() {
+  const { admin } = useAuth();
+  const basePanel = admin?.rol === 'ROLE_SUPER' ? '/admin' : '/';
+
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
 
-      <Route element={<RequirePanelAdmin><Layout /></RequirePanelAdmin>}>
+      <Route element={<RequirePanelAdmin><Layout base={basePanel} mostrarMenu={admin?.rol !== 'ROLE_SUPER'} /></RequirePanelAdmin>}>
         <Route path="/" element={<Home />} />
         <Route
           path="/clientes"

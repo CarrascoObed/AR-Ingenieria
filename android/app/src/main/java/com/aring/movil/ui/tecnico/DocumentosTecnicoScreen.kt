@@ -57,7 +57,7 @@ fun DocumentosTecnicoScreen(tecnico: Tecnico) {
     var error by remember { mutableStateOf("") }
     var aviso by remember { mutableStateOf("") }
     var limpiarAbierto by remember { mutableStateOf(false) }
-    var tareaSeleccionada by remember { mutableStateOf<Tarea?>(null) }
+    var informePendiente by remember { mutableStateOf<com.aring.movil.data.DescargaInforme?>(null) }
 
     val ocultas = remember {
         mutableStateOf(Prefs.leerOcultasFinalizadas().mapNotNull { it.toIntOrNull() }.toSet())
@@ -79,13 +79,13 @@ fun DocumentosTecnicoScreen(tecnico: Tecnico) {
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
     ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        val tarea = tareaSeleccionada ?: return@rememberLauncherForActivityResult
+        val informe = informePendiente
+        informePendiente = null
+        if (uri == null || informe == null) return@rememberLauncherForActivityResult
         scope.launch {
             try {
-                val bytes = ApiService.informeTarea(tarea.id)
                 context.contentResolver.openOutputStream(uri)?.use { out ->
-                    out.write(bytes)
+                    out.write(informe.bytes)
                 } ?: throw IllegalStateException("No se pudo abrir el archivo.")
                 mostrarAviso("Informe generado y descargado.")
             } catch (e: Exception) {
@@ -158,8 +158,16 @@ fun DocumentosTecnicoScreen(tecnico: Tecnico) {
                         t,
                         onDescargar = {
                             error = ""
-                            tareaSeleccionada = t
-                            crearDocumento.launch("informe-tareas-finalizadas-${t.codigo}.docx")
+                            scope.launch {
+                                try {
+                                    val informe = ApiService.informeTarea(t.id)
+                                    informePendiente = informe
+                                    crearDocumento.launch(informe.nombreArchivo)
+                                } catch (e: Exception) {
+                                    error = e.message?.takeIf { it.isNotBlank() }
+                                        ?: "No se pudo generar el informe."
+                                }
+                            }
                         }
                     )
                 }

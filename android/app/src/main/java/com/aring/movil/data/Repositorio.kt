@@ -176,20 +176,20 @@ object Repositorio {
     }
 
     suspend fun marcarTodasLeidas() {
-        ApiService.marcarTodasLeidas(null)
         for (i in notificaciones.indices) {
             if (!notificaciones[i].leida) notificaciones[i] = notificaciones[i].copy(leida = true)
         }
+        ApiService.marcarTodasLeidas(null)
     }
 
     suspend fun marcarTodasLeidasTecnico(tecnicoId: Int) {
-        ApiService.marcarTodasLeidas(tecnicoId)
         for (i in notificaciones.indices) {
             val n = notificaciones[i]
             if (!n.leida && n.tecnicoDestinoId == tecnicoId) {
                 notificaciones[i] = n.copy(leida = true)
             }
         }
+        ApiService.marcarTodasLeidas(tecnicoId)
     }
 
     suspend fun limpiarNotificaciones() {

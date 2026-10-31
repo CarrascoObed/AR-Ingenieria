@@ -38,11 +38,11 @@ object TrifasicoValidation {
                 return ValidationResult.fail("Debe tomar la fotografía de ${m.label}")
             }
         }
-        if (state.reapriete == null) {
-            return ValidationResult.fail("Seleccione una opción de Reapriete")
+        if (state.reaprietePhoto == null) {
+            return ValidationResult.fail("Debe tomar la fotografía de Reapriete")
         }
-        if (state.aseo == null) {
-            return ValidationResult.fail("Seleccione una opción de Aseo")
+        if (state.aseoPhoto == null) {
+            return ValidationResult.fail("Debe tomar la fotografía de Aseo")
         }
         return ValidationResult.ok()
     }

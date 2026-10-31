@@ -1,6 +1,7 @@
 package com.aring.movil.data
 
 import android.graphics.Bitmap
+import android.net.Uri
 import android.util.Base64
 import com.aring.movil.ui.panel.common.decodeSampledBitmap
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +18,8 @@ import java.util.concurrent.TimeUnit
 
 class ApiException(message: String, val codigo: Int? = null) : Exception(message)
 
+data class DescargaInforme(val bytes: ByteArray, val nombreArchivo: String)
+
 object ApiService {
 
     /**
@@ -24,7 +27,7 @@ object ApiService {
      * - Dispositivo físico / misma red Wi-Fi: IP local de la PC que corre el backend.
      * - Emulador Android: usar http://10.0.2.2:8080 (alias al localhost de la PC).
      */
-    const val BASE_URL = "http://192.168.1.22:8080"
+    const val BASE_URL = "http://192.168.1.17:8080"
 
     @Volatile
     var token: String? = null
@@ -173,7 +176,7 @@ object ApiService {
             )
         )
 
-    suspend fun informeTarea(tareaId: Int): ByteArray =
+    suspend fun informeTarea(tareaId: Int): DescargaInforme =
         withContext(Dispatchers.IO) {
             val request = Request.Builder()
                 .url("$BASE_URL/api/documentos/informe-tarea.docx?tareaId=$tareaId")
@@ -194,10 +197,24 @@ object ApiService {
                         resp.code
                     )
                 }
-                resp.body?.bytes()
+                val bytes = resp.body?.bytes()
                     ?: throw ApiException("Respuesta vacía del servidor.")
+                DescargaInforme(
+                    bytes = bytes,
+                    nombreArchivo = nombreArchivo(resp.header("Content-Disposition"))
+                )
             }
         }
+
+    private fun nombreArchivo(contentDisposition: String?): String {
+        if (contentDisposition.isNullOrBlank()) return "informe-tarea.docx"
+        val encoded = Regex("filename\\*\\s*=\\s*UTF-8''([^;]+)", RegexOption.IGNORE_CASE)
+            .find(contentDisposition)?.groupValues?.get(1)?.trim()?.trim('"')
+        if (!encoded.isNullOrBlank()) return Uri.decode(encoded)
+        val simple = Regex("filename\\s*=\\s*\\\"?([^\\\";]+)", RegexOption.IGNORE_CASE)
+            .find(contentDisposition)?.groupValues?.get(1)?.trim()
+        return simple?.takeIf { it.isNotBlank() } ?: "informe-tarea.docx"
+    }
 
     fun fotoBase64(path: String?): String? {
         if (path == null) return null

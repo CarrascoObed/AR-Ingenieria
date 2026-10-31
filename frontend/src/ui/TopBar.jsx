@@ -61,10 +61,18 @@ export default function TopBar() {
 
   const marcarTodas = async () => {
     try {
-      await api.put('/notificaciones/leer-todas');
       setNotificaciones((prev) => prev.map((n) => ({ ...n, leida: true })));
+      await api.put('/notificaciones/leer-todas');
     } catch (e) {
       console.error(mensajeError(e));
+    }
+  };
+
+  const alternarNotificaciones = async () => {
+    const abrir = !notifAbierto;
+    setNotifAbierto(abrir);
+    if (abrir && noLeidas > 0) {
+      await marcarTodas();
     }
   };
 
@@ -103,7 +111,9 @@ export default function TopBar() {
       <div className="topbar-izq">
         <div className="topbar-logo">
           <img src="/favicon.svg" alt="Logo" />
-          <span className="nombre">Panel de Administración</span>
+          <span className="nombre">
+            {admin?.rol === 'ROLE_SUPER' ? 'Super Usuario' : 'Panel de Administración'}
+          </span>
         </div>
       </div>
 
@@ -133,7 +143,7 @@ export default function TopBar() {
             className="topbar-icono"
             title="Notificaciones"
             aria-label="Notificaciones"
-            onClick={() => setNotifAbierto((v) => !v)}
+            onClick={alternarNotificaciones}
           >
             <Bell size={20} />
             {noLeidas > 0 && <span className="notif-badge">{noLeidas}</span>}

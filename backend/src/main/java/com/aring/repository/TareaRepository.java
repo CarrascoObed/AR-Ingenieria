@@ -7,10 +7,28 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface TareaRepository extends JpaRepository<Tarea, Long>, JpaSpecificationExecutor<Tarea> {
+
+    Optional<Tarea> findByCodigoIgnoreCase(String codigo);
+
+    @Query("select distinct trim(t.nombreRecinto) from Tarea t " +
+            "where t.estado = com.aring.model.EstadoTarea.FINALIZADA " +
+            "and lower(trim(t.nombreRecinto)) like lower(concat('%', :consulta, '%')) " +
+            "and exists (select i.id from InformeTablero i where i.tarea = t) " +
+            "order by trim(t.nombreRecinto)")
+    List<String> sugerirEdificiosFinalizados(@Param("consulta") String consulta, Pageable pageable);
+
+    @Query("select t from Tarea t " +
+            "where t.estado = com.aring.model.EstadoTarea.FINALIZADA " +
+            "and lower(trim(t.nombreRecinto)) = lower(trim(:nombreRecinto)) " +
+            "and exists (select i.id from InformeTablero i where i.tarea = t) " +
+            "order by t.fechaFin desc, t.id desc")
+    List<Tarea> listarFinalizadasConInformesDeEdificio(@Param("nombreRecinto") String nombreRecinto);
 
     boolean existsByTecnicoCabeceraIdAndEstadoNot(Long tecnicoId, EstadoTarea estado);
 

@@ -7,17 +7,6 @@ const val TYPE_MONOFASICO = "MONOFASICO"
 
 fun newId(): String = UUID.randomUUID().toString()
 
-enum class OptionSel { SI, NO, NA }
-
-fun OptionSel.label(): String = when (this) {
-    OptionSel.SI -> "Sí"
-    OptionSel.NO -> "No"
-    OptionSel.NA -> "N/A"
-}
-
-fun optionSelFromLabel(label: String): OptionSel? =
-    OptionSel.entries.find { it.label() == label }
-
 enum class ChecklistStatus { OK, CR, NA }
 
 fun ChecklistStatus.label(): String = when (this) {

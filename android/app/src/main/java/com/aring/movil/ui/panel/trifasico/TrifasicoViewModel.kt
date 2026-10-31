@@ -1,7 +1,6 @@
 package com.aring.movil.ui.panel.trifasico
 
 import com.aring.movil.data.panel.ChecklistStatus
-import com.aring.movil.data.panel.OptionSel
 import com.aring.movil.data.panel.TableroDraftStore
 import com.aring.movil.data.panel.TrifasicoState
 import com.aring.movil.data.panel.TrifasicoValidation
@@ -68,9 +67,9 @@ class TrifasicoViewModel(private val tareaId: Int) {
             )
         }
 
-    fun setReapriete(value: OptionSel) = cambiar { it.copy(reapriete = value) }
+    fun setReaprietePhoto(path: String) = cambiar { it.copy(reaprietePhoto = path) }
 
-    fun setAseo(value: OptionSel) = cambiar { it.copy(aseo = value) }
+    fun setAseoPhoto(path: String) = cambiar { it.copy(aseoPhoto = path) }
 
     fun setChecklistStatus(itemId: String, status: ChecklistStatus) =
         cambiar { st ->
