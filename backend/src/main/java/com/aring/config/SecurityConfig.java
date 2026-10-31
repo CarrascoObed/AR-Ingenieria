@@ -64,7 +64,8 @@ public class SecurityConfig {
                 "http://192.168.1.12:*",
                 "http://192.168.1.13:*",
                 "http://192.168.1.1:*",
-                "http://192.168.1.22:*"
+                "http://192.168.1.22:*",
+                "https://ar-ingenieria.taila89688.ts.net"
         ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
