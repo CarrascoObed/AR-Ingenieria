@@ -30,6 +30,9 @@ public class InformeTablero {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "client_operation_id", unique = true, length = 64)
+    private String clientOperationId;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "tarea_id", nullable = false)
     private Tarea tarea;

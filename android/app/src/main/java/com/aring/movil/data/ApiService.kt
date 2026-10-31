@@ -25,7 +25,7 @@ object ApiService {
 
     /**
      * Dirección del backend, configurable al compilar mediante la propiedad Gradle API_BASE_URL.
-     * Por defecto conserva la dirección local del servidor para pruebas en la red Wi-Fi.
+     * El valor predeterminado usa el acceso HTTPS público de Tailscale Funnel.
      */
     const val BASE_URL = BuildConfig.API_BASE_URL
 

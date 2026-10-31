@@ -1,0 +1,160 @@
+package com.aring.movil.data
+
+import android.content.Context
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.Worker
+import androidx.work.WorkerParameters
+import org.json.JSONObject
+import java.io.File
+import java.util.UUID
+
+/** Durable on-device outbox. Reports stay here until the server confirms receipt. */
+object OfflineSync {
+    private lateinit var root: File
+    private lateinit var authPrefs: android.content.SharedPreferences
+    private lateinit var statusPrefs: android.content.SharedPreferences
+    fun init(context: Context) {
+        root = File(context.filesDir, "offline-outbox").apply { mkdirs() }
+        authPrefs = context.getSharedPreferences("aring_outbox_auth", Context.MODE_PRIVATE)
+        statusPrefs = context.getSharedPreferences("aring_outbox_status", Context.MODE_PRIVATE)
+    }
+
+    @Synchronized fun guardarInforme(tareaId: Int, tecnico: Tecnico, payload: JSONObject) {
+        guardarCredenciales(tecnico)
+        val id = payload.optString("clientOperationId").ifBlank { UUID.randomUUID().toString() }
+        payload.put("clientOperationId", id)
+        atomicWrite(File(root, "report-$id.json"), JSONObject()
+            .put("tareaId", tareaId).put("tecnicoId", tecnico.id).put("payload", payload).toString())
+        programar(root.context())
+    }
+
+    @Synchronized fun finalizar(tareaId: Int, tecnico: Tecnico) {
+        guardarCredenciales(tecnico)
+        atomicWrite(File(root, "finish-$tareaId.json"), JSONObject()
+            .put("tareaId", tareaId).put("tecnicoId", tecnico.id).toString())
+        programar(root.context())
+    }
+
+    fun informes(tareaId: Int): List<File> = root.listFiles { f -> f.name.startsWith("report-") && runCatching { JSONObject(f.readText()).optInt("tareaId") == tareaId }.getOrDefault(false) }
+        ?.sortedBy { it.name } ?: emptyList()
+    fun finalizaciones(): List<File> = root.listFiles { f -> f.name.startsWith("finish-") }?.sortedBy { it.name } ?: emptyList()
+    fun pendiente(tareaId: Int): Boolean = File(root, "finish-$tareaId.json").exists()
+    fun hayPendientes(): Boolean = root.listFiles()?.any { it.name.startsWith("report-") || it.name.startsWith("finish-") } == true
+    fun ultimoError(): String = statusPrefs.getString("last_error", "").orEmpty()
+    internal fun credenciales(tecnicoId: Int): Tecnico? {
+        val rut = authPrefs.getString("rut_$tecnicoId", null) ?: return null
+        return Tecnico(tecnicoId, "", "", rut, authPrefs.getString("password_$tecnicoId", "").orEmpty(), "", "", "")
+    }
+    internal fun registrarError(mensaje: String) { statusPrefs.edit().putString("last_error", mensaje).apply() }
+    internal fun limpiarError() { statusPrefs.edit().remove("last_error").apply() }
+    internal fun limpiarCredencialesSinPendientes(tecnicoId: Int) {
+        val pendientes = root.listFiles()?.any { file ->
+            (file.name.startsWith("report-") || file.name.startsWith("finish-")) && runCatching {
+                JSONObject(file.readText()).optInt("tecnicoId") == tecnicoId
+            }.getOrDefault(false)
+        } == true
+        if (!pendientes) authPrefs.edit().remove("rut_$tecnicoId").remove("password_$tecnicoId").apply()
+    }
+
+    private fun guardarCredenciales(tecnico: Tecnico) {
+        authPrefs.edit().putString("rut_${tecnico.id}", tecnico.rut)
+            .putString("password_${tecnico.id}", tecnico.password).apply()
+    }
+
+    fun reintentarPendientes(context: Context) {
+        if (hayPendientes()) programar(context.applicationContext)
+    }
+
+    private fun File.context(): Context = appContext ?: error("OfflineSync no inicializado")
+    @Volatile private var appContext: Context? = null
+    fun initWithContext(context: Context) {
+        appContext = context.applicationContext
+        init(context)
+        val current = Prefs.leerTecnico()
+        if (current != null && hayPendientes()) {
+            val pendingIds = buildSet {
+                root.listFiles()?.filter { it.name.startsWith("report-") || it.name.startsWith("finish-") }
+                    ?.forEach { file -> runCatching { add(JSONObject(file.readText()).optInt("tecnicoId")) } }
+            }
+            if (current.id in pendingIds) guardarCredenciales(current)
+        }
+    }
+
+    private fun programar(context: Context) {
+        val request = OneTimeWorkRequestBuilder<OfflineSyncWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork("aring-offline-sync", ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+    }
+
+    private fun atomicWrite(target: File, content: String) {
+        val tmp = File(target.parentFile, target.name + ".tmp")
+        tmp.writeText(content)
+        if (!tmp.renameTo(target)) { target.delete(); check(tmp.renameTo(target)) { "No se pudo guardar el envío pendiente" } }
+    }
+}
+
+object OfflineTaskCache {
+    private lateinit var prefs: android.content.SharedPreferences
+    fun init(context: Context) { prefs = context.getSharedPreferences("aring_offline_tasks", Context.MODE_PRIVATE) }
+    fun save(tecnicoId: Int, tasks: List<Tarea>) {
+        val array = org.json.JSONArray()
+        tasks.filter { it.esDeTecnico(tecnicoId) }.forEach { t ->
+            array.put(JSONObject().put("id", t.id).put("codigo", t.codigo).put("tipo", t.tipo)
+                .put("estado", t.estado).put("nombreRecinto", t.nombreRecinto).put("direccion", t.direccion)
+                .put("descripcion", t.descripcion).put("tecnicoCabeceraId", t.tecnicoCabeceraId)
+                .put("tecnicoAyudantesIds", org.json.JSONArray(t.tecnicoAyudantesIds))
+                .put("fechaInicio", t.fechaInicio).put("tablerosRealizados", t.tablerosRealizados))
+        }
+        prefs.edit().putString("tasks_$tecnicoId", array.toString()).apply()
+    }
+    fun load(tecnicoId: Int): org.json.JSONArray? = prefs.getString("tasks_$tecnicoId", null)?.let { org.json.JSONArray(it) }
+}
+
+class OfflineSyncWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
+    override fun doWork(): Result {
+        Prefs.init(applicationContext)
+        OfflineSync.initWithContext(applicationContext)
+        return try {
+            val directory = File(applicationContext.filesDir, "offline-outbox")
+            val reports = directory.listFiles { f -> f.name.startsWith("report-") }?.sortedBy { it.name }.orEmpty()
+            val technicianIds = mutableSetOf<Int>()
+            val tokens = mutableMapOf<Int, String>()
+            fun tokenPara(tecnicoId: Int): String = tokens.getOrPut(tecnicoId) {
+                val tecnico = OfflineSync.credenciales(tecnicoId)
+                    ?: error("No hay credenciales disponibles para sincronizar con el técnico $tecnicoId.")
+                kotlinx.coroutines.runBlocking { ApiService.loginTecnico(tecnico.rut, tecnico.password) }
+            }
+            for (file in reports) {
+                val item = JSONObject(file.readText())
+                val taskId = item.getInt("tareaId")
+                val tecnicoId = item.getInt("tecnicoId")
+                technicianIds.add(tecnicoId)
+                val token = tokenPara(tecnicoId)
+                kotlinx.coroutines.runBlocking { ApiService.enviarInforme(token, taskId.toLong(), item.getJSONObject("payload")) }
+                file.delete()
+            }
+            val finishes = directory.listFiles { f -> f.name.startsWith("finish-") }?.sortedBy { it.name }.orEmpty()
+            for (file in finishes) {
+                val item = JSONObject(file.readText())
+                val tecnicoId = item.getInt("tecnicoId")
+                technicianIds.add(tecnicoId)
+                val token = tokenPara(tecnicoId)
+                ApiService.token = token
+                kotlinx.coroutines.runBlocking { ApiService.cambiarEstadoTarea(item.getInt("tareaId"), "FINALIZADA") }
+                file.delete()
+            }
+            technicianIds.forEach(OfflineSync::limpiarCredencialesSinPendientes)
+            OfflineSync.limpiarError()
+            Result.success()
+        } catch (e: Exception) {
+            OfflineSync.registrarError((e as? ApiException)?.message ?: e.message ?: "Error inesperado de sincronización.")
+            val code = (e as? ApiException)?.codigo
+            if (code == null || code == 408 || code == 429 || code >= 500) Result.retry() else Result.failure()
+        }
+    }
+}

@@ -7,6 +7,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aring.movil.data.ApiException
 import com.aring.movil.data.ApiService
+import com.aring.movil.data.OfflineSync
+import com.aring.movil.data.Repositorio
 import com.aring.movil.data.Tecnico
 import com.aring.movil.data.panel.MonofasicoState
 import com.aring.movil.data.panel.TableroRepository
@@ -47,8 +49,8 @@ class RegistroTableroViewModel : ViewModel() {
             estado = EstadoEnvio.Enviando
             try {
                 val cuerpo = withContext(Dispatchers.Default) { construir() }
-                val token = ApiService.loginTecnico(tecnico.rut, tecnico.password)
-                ApiService.enviarInforme(token, tareaId.toLong(), cuerpo)
+                withContext(Dispatchers.IO) { OfflineSync.guardarInforme(tareaId, tecnico, cuerpo) }
+                Repositorio.registrarTableroEnDispositivo(tareaId)
                 estado = EstadoEnvio.Exito
             } catch (e: Exception) {
                 estado = EstadoEnvio.Error(

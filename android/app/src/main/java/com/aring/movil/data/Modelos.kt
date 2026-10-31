@@ -31,6 +31,7 @@ data class Tarea(
     val tecnicoAyudantesIds: List<Int> = emptyList(),
     val fechaInicio: String? = null,
     val tablerosRealizados: Int = 0,
+    val sincronizacionPendiente: Boolean = false,
 ) {
     fun esCabecera(tecnicoId: Int): Boolean = tecnicoCabeceraId == tecnicoId
 

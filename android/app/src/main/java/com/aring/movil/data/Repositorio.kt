@@ -62,7 +62,11 @@ object Repositorio {
     }
 
     suspend fun cargarTecnico(tecnicoId: Int) {
-        val ts = ApiService.tareasMias(tecnicoId).let(::tareasDesdeJson)
+        val ts = try {
+            ApiService.tareasMias(tecnicoId).also { OfflineTaskCache.save(tecnicoId, tareasDesdeJson(it)) }.let(::tareasDesdeJson)
+        } catch (e: Exception) {
+            OfflineTaskCache.load(tecnicoId)?.let(::tareasDesdeJson) ?: throw e
+        }.map { if (OfflineSync.pendiente(it.id)) it.copy(estado = "Finalizada", sincronizacionPendiente = true) else it }
         val tecs = runCatching { ApiService.tecnicos().let(::tecnicosDesdeJson) }.getOrDefault(emptyList())
         val notifs = ApiService.notificaciones(tecnicoId).let(::notificacionesDesdeJson)
         tareas.clear()
@@ -157,8 +161,13 @@ object Repositorio {
 
     fun tareasDeTecnico(tecnicoId: Int): List<Tarea> =
         tareas
-            .filter { it.esDeTecnico(tecnicoId) && it.estado != "Finalizada" }
+            .filter { it.esDeTecnico(tecnicoId) && (it.estado != "Finalizada" || it.sincronizacionPendiente) }
             .sortedBy { it.id }
+
+    fun registrarTableroEnDispositivo(tareaId: Int) {
+        val index = tareas.indexOfFirst { it.id == tareaId }
+        if (index >= 0) reemplazarTarea(tareas[index].copy(tablerosRealizados = tareas[index].tablerosRealizados + 1))
+    }
 
     suspend fun iniciarTarea(id: Int, ayudantesIds: List<Int>) {
         reemplazarTarea(tareaDesdeJson(ApiService.iniciarTarea(id, ayudantesIds)))
@@ -227,6 +236,8 @@ object Repositorio {
     private fun reemplazarTarea(tarea: Tarea) {
         val i = tareas.indexOfFirst { it.id == tarea.id }
         if (i >= 0) tareas[i] = tarea else tareas.add(0, tarea)
+        val tecnicoId = Prefs.leerTecnico()?.id
+        if (tecnicoId != null) OfflineTaskCache.save(tecnicoId, tareas.toList())
     }
 
     private fun estadoApiDesdeEtiqueta(etiqueta: String): String = when (etiqueta) {
@@ -250,7 +261,7 @@ object Repositorio {
         nombreRecinto = o.optString("nombreRecinto"),
         direccion = o.optString("direccion"),
         descripcion = o.optString("descripcion"),
-        tecnicoCabeceraId = o.optJSONObject("tecnicoCabecera")?.optInt("id") ?: 0,
+        tecnicoCabeceraId = o.optJSONObject("tecnicoCabecera")?.optInt("id") ?: o.optInt("tecnicoCabeceraId"),
         tecnicoAyudantesIds = (o.optJSONArray("tecnicoAyudantesIds") ?: JSONArray()).let { arr ->
             (0 until arr.length()).map { arr.optInt(it) }
         },

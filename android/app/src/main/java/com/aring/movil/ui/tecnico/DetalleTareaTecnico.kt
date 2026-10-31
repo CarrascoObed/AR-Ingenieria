@@ -113,9 +113,19 @@ fun DetalleTareaTecnico(
 
         Spacer(Modifier.height(12.dp))
 
+        if (tarea.sincronizacionPendiente) {
+            Text(
+                "Esta tarea ya está terminada en el dispositivo y espera enviar sus datos cuando vuelva Internet.",
+                color = TextoGris,
+                fontSize = 13.sp
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+
         BtnPrimario(
-            texto = if (tarea.estado == "En proceso") "Retomar tarea" else "Ingresar a la tarea",
+            texto = if (tarea.sincronizacionPendiente) "Pendiente de sincronización" else if (tarea.estado == "En proceso") "Retomar tarea" else "Ingresar a la tarea",
             modifier = Modifier.fillMaxWidth(),
+            enabled = !tarea.sincronizacionPendiente,
             icono = Icons.Filled.PlayArrow
         ) {
             onIngresar(tarea)

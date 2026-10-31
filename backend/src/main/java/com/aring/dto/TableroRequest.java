@@ -35,6 +35,8 @@ public class TableroRequest {
 
     private Long tecnicoId;
 
+    private String clientOperationId;
+
     private List<MedicionRequest> mediciones = new ArrayList<>();
 
     private List<ChecklistRequest> checklist = new ArrayList<>();

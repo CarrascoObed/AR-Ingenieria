@@ -126,7 +126,7 @@ fun EnviarInformeScreen(
         }
         Spacer(Modifier.height(24.dp))
         Text(
-            "Enviando informe",
+            if (estado is EstadoEnvio.Exito) "Informe guardado en el teléfono" else "Preparando informe",
             fontWeight = FontWeight.ExtraBold,
             fontSize = 21.sp,
             color = TextoOscuro
@@ -160,7 +160,7 @@ fun EnviarInformeScreen(
             }
             is EstadoEnvio.Exito -> {
                 Text(
-                    "El informe del tablero se guardó correctamente en el servidor.",
+                    "El informe quedó guardado en este dispositivo. Se enviará al servidor automáticamente cuando vuelva la conexión.",
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center,
                     color = TextoGris,

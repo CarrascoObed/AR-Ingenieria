@@ -131,6 +131,10 @@ public class TareaService {
         Tarea tarea = buscarOError(id);
         EstadoTarea nuevo = request.getEstado();
 
+        if (nuevo == EstadoTarea.FINALIZADA && tarea.getEstado() == EstadoTarea.FINALIZADA) {
+            return tarea;
+        }
+
         if (nuevo == EstadoTarea.EN_PROCESO && tarea.getEstado() == EstadoTarea.NO_INICIADA) {
             tarea.setEstado(EstadoTarea.EN_PROCESO);
             tarea.setFechaInicio(Instant.now());

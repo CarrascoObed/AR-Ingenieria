@@ -41,8 +41,19 @@ public class TableroService {
         Tarea tarea = tareaRepository.findById(tareaId)
                 .orElseThrow(() -> new ApiException("La tarea no existe.", HttpStatus.NOT_FOUND));
 
+        if (request.getClientOperationId() != null && !request.getClientOperationId().isBlank()) {
+            var existente = informeTableroRepository.findByClientOperationId(request.getClientOperationId());
+            if (existente.isPresent()) {
+                if (!existente.get().getTarea().getId().equals(tareaId)) {
+                    throw new ApiException("La clave de operación ya fue usada por otra tarea.", HttpStatus.CONFLICT);
+                }
+                return InformeTableroDto.from(existente.get());
+            }
+        }
+
         InformeTablero informe = new InformeTablero();
         informe.setTarea(tarea);
+        informe.setClientOperationId(request.getClientOperationId());
         try {
             informe.setTipoTablero(TipoTablero.valueOf(request.getTipoTablero()));
         } catch (IllegalArgumentException e) {

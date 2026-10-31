@@ -69,7 +69,9 @@ fun TableroConfirmacion(
         )
         Spacer(Modifier.height(10.dp))
         Text(
-            "Todos los tableros realizados fueron registrados y la tarea quedó finalizada.",
+            if (tarea.sincronizacionPendiente)
+                "La tarea y sus informes están guardados en este dispositivo. Se enviarán automáticamente cuando vuelva la conexión. Conserva la sesión para completar la sincronización."
+            else "Todos los tableros realizados fueron registrados y la tarea quedó finalizada.",
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
             color = TextoGris,

@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,6 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aring.movil.data.ApiService
+import com.aring.movil.data.OfflineSync
 import com.aring.movil.data.Prefs
 import com.aring.movil.data.Repositorio
 import com.aring.movil.data.Tarea
@@ -54,7 +56,7 @@ fun DocumentosTecnicoScreen(tecnico: Tecnico) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    var error by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf(OfflineSync.ultimoError()) }
     var aviso by remember { mutableStateOf("") }
     var limpiarAbierto by remember { mutableStateOf(false) }
     var informePendiente by remember { mutableStateOf<com.aring.movil.data.DescargaInforme?>(null) }
@@ -63,8 +65,9 @@ fun DocumentosTecnicoScreen(tecnico: Tecnico) {
         mutableStateOf(Prefs.leerOcultasFinalizadas().mapNotNull { it.toIntOrNull() }.toSet())
     }
     val finalizadas = Repositorio.tareas
-        .filter { it.estado == "Finalizada" && it.id !in ocultas.value }
+        .filter { it.estado == "Finalizada" && !it.sincronizacionPendiente && it.id !in ocultas.value }
         .sortedBy { it.id }
+    val pendientesSync = Repositorio.tareas.count { it.sincronizacionPendiente }
 
     fun mostrarAviso(texto: String) {
         aviso = texto
@@ -128,6 +131,19 @@ fun DocumentosTecnicoScreen(tecnico: Tecnico) {
 
         BannerError(error)
         BannerOk(aviso)
+        if (pendientesSync > 0) {
+            Text(
+                "$pendientesSync tarea(s) terminada(s) esperan sincronizarse. La descarga del informe estará disponible cuando el servidor las reciba.",
+                modifier = Modifier.fillMaxWidth(), color = TextoGris, fontSize = 13.sp,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(8.dp))
+            BtnSecundario(texto = "Reintentar sincronización", icono = Icons.Filled.CloudSync) {
+                error = ""
+                OfflineSync.reintentarPendientes(context)
+                mostrarAviso("Reintento de sincronización programado.")
+            }
+        }
         Spacer(Modifier.height(4.dp))
 
         if (finalizadas.isNotEmpty()) {

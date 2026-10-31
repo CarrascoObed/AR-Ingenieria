@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import com.aring.movil.data.Admin
 import com.aring.movil.data.ApiException
 import com.aring.movil.data.ApiService
+import com.aring.movil.data.OfflineSync
+import com.aring.movil.data.OfflineTaskCache
 import com.aring.movil.data.Prefs
 import com.aring.movil.data.Repositorio
 import com.aring.movil.data.Sesion
@@ -35,6 +37,8 @@ import com.aring.movil.data.Tecnico
 import com.aring.movil.data.inicialesDe
 import com.aring.movil.data.panel.TableroDraftStore
 import com.aring.movil.data.panel.TableroRepository
+import com.aring.movil.data.panel.TYPE_MONOFASICO
+import com.aring.movil.data.panel.TYPE_TRIFASICO
 import com.aring.movil.ui.components.BannerError
 import com.aring.movil.ui.components.BarraNavegacion
 import com.aring.movil.ui.components.ConfirmarDialog
@@ -55,6 +59,8 @@ import com.aring.movil.ui.tecnico.IngresarTareaScreen
 import com.aring.movil.ui.tecnico.TareasTecnicoScreen
 import com.aring.movil.ui.theme.FondoGris
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val ITEMS_ADMIN = listOf(
     "Dashboard" to Icons.Filled.Home,
@@ -415,21 +421,43 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                 confirmarFinalizar = false
                 errorFinalizar = ""
                 scope.launch {
-                    val error = enviarTablerosPendientes(tareaFinalizarId, tecnico)
                     val tarea = Repositorio.tareas.firstOrNull { it.id == tareaFinalizarId }
-                    if (error != null) {
-                        errorFinalizar = error
+                    try {
+                        if (tarea == null || !tarea.esCabecera(tecnico.id)) {
+                            errorFinalizar = "Solo el técnico responsable puede finalizar la tarea."
+                            return@launch
+                        }
+                        val trifasico = TableroDraftStore.cargarTrifasico(tareaFinalizarId)
+                        val monofasico = TableroDraftStore.cargarMonofasico(tareaFinalizarId)
+                        if (trifasico != null) {
+                            val informe = withContext(Dispatchers.Default) { TableroRepository.buildTrifasico(tareaFinalizarId, tecnico.id, trifasico) }
+                            withContext(Dispatchers.IO) { OfflineSync.guardarInforme(tareaFinalizarId, tecnico, informe) }
+                            Repositorio.registrarTableroEnDispositivo(tareaFinalizarId)
+                            TableroDraftStore.limpiar(tareaFinalizarId, TYPE_TRIFASICO)
+                        }
+                        if (monofasico != null) {
+                            val informe = withContext(Dispatchers.Default) { TableroRepository.buildMonofasico(tareaFinalizarId, tecnico.id, monofasico) }
+                            withContext(Dispatchers.IO) { OfflineSync.guardarInforme(tareaFinalizarId, tecnico, informe) }
+                            Repositorio.registrarTableroEnDispositivo(tareaFinalizarId)
+                            TableroDraftStore.limpiar(tareaFinalizarId, TYPE_MONOFASICO)
+                        }
+                        val cantidadTableros = Repositorio.tareas.firstOrNull { it.id == tareaFinalizarId }?.tablerosRealizados
+                            ?: tarea.tablerosRealizados
+                        if (OfflineSync.informes(tareaFinalizarId).isEmpty() && cantidadTableros == 0) {
+                            errorFinalizar = "Esta tarea no tiene tableros inspeccionados. Registre al menos uno antes de finalizar."
+                            return@launch
+                        }
+                        OfflineSync.finalizar(tareaFinalizarId, tecnico)
+                        val finalLocal = tarea.copy(estado = "Finalizada", sincronizacionPendiente = true)
+                        val index = Repositorio.tareas.indexOfFirst { it.id == tareaFinalizarId }
+                        if (index >= 0) Repositorio.tareas[index] = finalLocal
+                        OfflineTaskCache.save(tecnico.id, Repositorio.tareas.toList())
+                        TableroDraftStore.limpiarTarea(tareaFinalizarId)
+                        pantalla = PantallaTec.Confirmacion(finalLocal)
+                    } catch (e: Exception) {
+                        errorFinalizar = e.message ?: "No se pudo guardar la finalización en el dispositivo."
                         pantalla = if (tarea != null) {
                             PantallaTec.SeleccionTablero(tarea)
-                        } else {
-                            PantallaTec.Lista
-                        }
-                    } else {
-                        Repositorio.cambiarEstadoTarea(tareaFinalizarId, "Finalizada")
-                        TableroDraftStore.limpiarTarea(tareaFinalizarId)
-                        val tareaFinal = Repositorio.tareas.firstOrNull { it.id == tareaFinalizarId }
-                        pantalla = if (tareaFinal != null) {
-                            PantallaTec.Confirmacion(tareaFinal)
                         } else {
                             PantallaTec.Lista
                         }
@@ -441,38 +469,3 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
     }
 }
 
-private suspend fun enviarTablerosPendientes(tareaId: Int, tecnico: Tecnico): String? {
-    val trifasico = TableroDraftStore.cargarTrifasico(tareaId)
-    val monofasico = TableroDraftStore.cargarMonofasico(tareaId)
-    return try {
-        if (trifasico != null || monofasico != null) {
-            val token = ApiService.loginTecnico(tecnico.rut, tecnico.password)
-            ApiService.token = token
-            if (trifasico != null) {
-                ApiService.enviarInforme(
-                    token,
-                    tareaId.toLong(),
-                    TableroRepository.buildTrifasico(tareaId, tecnico.id, trifasico)
-                )
-            }
-            if (monofasico != null) {
-                ApiService.enviarInforme(
-                    token,
-                    tareaId.toLong(),
-                    TableroRepository.buildMonofasico(tareaId, tecnico.id, monofasico)
-                )
-            }
-            null
-        } else {
-            val tableros = ApiService.tablerosTarea(ApiService.token ?: "", tareaId)
-            if (tableros.length() == 0) {
-                "Esta tarea no tiene tableros inspeccionados para generar el informe. " +
-                    "Envíe al menos un tablero antes de finalizar."
-            } else {
-                null
-            }
-        }
-    } catch (e: Exception) {
-        (e as? ApiException)?.message ?: e.message ?: "No se pudo enviar el informe pendiente."
-    }
-}

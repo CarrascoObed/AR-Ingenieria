@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -94,6 +95,10 @@ fun TareasTecnicoScreen(
                             }
                         }
                         Spacer(Modifier.height(10.dp))
+                        if (t.sincronizacionPendiente) {
+                            Text("Pendiente de sincronizar · se enviará al recuperar conexión", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                            Spacer(Modifier.height(6.dp))
+                        }
                         Text(
                             t.nombreRecinto,
                             modifier = Modifier.fillMaxWidth(),
