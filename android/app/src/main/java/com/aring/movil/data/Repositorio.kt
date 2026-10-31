@@ -49,8 +49,7 @@ object Repositorio {
         }
     }
 
-    suspend fun cargarAdmin() {
-        val ts = ApiService.tareas().let(::tareasDesdeJson)
+    suspend fun cargarAdmin() {        val ts = ApiService.tareas().let(::tareasDesdeJson)
         val tecs = runCatching { ApiService.tecnicos().let(::tecnicosDesdeJson) }.getOrDefault(emptyList())
         val notifs = ApiService.notificaciones(null).let(::notificacionesDesdeJson)
         tareas.clear()
@@ -61,12 +60,28 @@ object Repositorio {
         notificaciones.addAll(notifs)
     }
 
+    /**
+     * Aplica a la vista local los efectos de envíos pendientes del outbox:
+     * - Si hay marcador de finalización, la tarea se muestra Finalizada y pendiente de sincronizar.
+     * - El contador suma los informes aún no confirmados por el servidor, para que no
+     *   aparezca en cero después de guardar tableros en el dispositivo.
+     */
+    private fun conEstadoLocal(t: Tarea): Tarea {
+        val pendientes = runCatching { OfflineSync.informes(t.id).size }.getOrDefault(0)
+        return when {
+            OfflineSync.pendiente(t.id) || t.sincronizacionPendiente ->
+                t.copy(estado = "Finalizada", sincronizacionPendiente = true, tablerosRealizados = t.tablerosRealizados + pendientes)
+            pendientes > 0 -> t.copy(tablerosRealizados = t.tablerosRealizados + pendientes)
+            else -> t
+        }
+    }
+
     suspend fun cargarTecnico(tecnicoId: Int) {
         val ts = try {
             ApiService.tareasMias(tecnicoId).also { OfflineTaskCache.save(tecnicoId, tareasDesdeJson(it)) }.let(::tareasDesdeJson)
         } catch (e: Exception) {
             OfflineTaskCache.load(tecnicoId)?.let(::tareasDesdeJson) ?: throw e
-        }.map { if (OfflineSync.pendiente(it.id)) it.copy(estado = "Finalizada", sincronizacionPendiente = true) else it }
+        }.map { conEstadoLocal(it) }
         val tecs = runCatching { ApiService.tecnicos().let(::tecnicosDesdeJson) }.getOrDefault(emptyList())
         val notifs = ApiService.notificaciones(tecnicoId).let(::notificacionesDesdeJson)
         tareas.clear()

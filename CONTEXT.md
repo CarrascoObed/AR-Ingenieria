@@ -246,6 +246,10 @@ El commit `3f663a2` (`Support offline task completion and sync`) fue subido a `o
 
 Docker backend: imagen base `maven:3.9-eclipse-temurin-21` build + `eclipse-temurin:21-jre` runtime; `.dockerignore` excluye `target/`. Imagen de salida `aring-backend-1.0.0.jar`.
 
+**Tamaño de cuerpos en Nginx (2026-10-31):** los informes móviles llevan fotos Base64 embebidas y superan el límite default de Nginx (1 MB) → el servidor responde HTTP **413 Request Entity Too Large** y el outbox nunca confirmaba. `frontend/nginx.conf` define `client_max_body_size 128m` + `proxy_send/read_timeout 180s` para `/api/`. Al desplegar: `sudo docker compose up -d --build frontend` (no requiere reconstruir backend).
+
+**Contador de tableros en móvil:** `Repositorio.conEstadoLocal` suma al `tablerosRealizados` del servidor los informes aún pendientes en el outbox (`OfflineSync.informes(id).size`), de modo que el contador no aparece en cero tras guardar tableros sin conexión.
+
 ---
 
 ## 9. Frontend (panel web React)
