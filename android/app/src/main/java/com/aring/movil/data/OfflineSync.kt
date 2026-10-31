@@ -119,42 +119,80 @@ class OfflineSyncWorker(context: Context, params: WorkerParameters) : Worker(con
     override fun doWork(): Result {
         Prefs.init(applicationContext)
         OfflineSync.initWithContext(applicationContext)
-        return try {
-            val directory = File(applicationContext.filesDir, "offline-outbox")
+        val directory = File(applicationContext.filesDir, "offline-outbox")
+        val technicianIds = mutableSetOf<Int>()
+        var falloAlgo = false
+
+        var tokenRestaurado = false
+        val tokenOriginal = ApiService.token
+        try {
             val reports = directory.listFiles { f -> f.name.startsWith("report-") }?.sortedBy { it.name }.orEmpty()
-            val technicianIds = mutableSetOf<Int>()
             val tokens = mutableMapOf<Int, String>()
             fun tokenPara(tecnicoId: Int): String = tokens.getOrPut(tecnicoId) {
                 val tecnico = OfflineSync.credenciales(tecnicoId)
-                    ?: error("No hay credenciales disponibles para sincronizar con el técnico $tecnicoId.")
+                    ?: throw ApiException("No hay credenciales guardadas para el técnico $tecnicoId. Inicie sesión de nuevo en este dispositivo.", null)
                 kotlinx.coroutines.runBlocking { ApiService.loginTecnico(tecnico.rut, tecnico.password) }
             }
+
             for (file in reports) {
-                val item = JSONObject(file.readText())
-                val taskId = item.getInt("tareaId")
-                val tecnicoId = item.getInt("tecnicoId")
-                technicianIds.add(tecnicoId)
-                val token = tokenPara(tecnicoId)
-                kotlinx.coroutines.runBlocking { ApiService.enviarInforme(token, taskId.toLong(), item.getJSONObject("payload")) }
-                file.delete()
+                // Un fallo en un informe no debe abortar el resto: cada archivo se procesa por separado.
+                runCatching {
+                    val item = JSONObject(file.readText())
+                    val taskId = item.getInt("tareaId")
+                    val tecnicoId = item.getInt("tecnicoId")
+                    technicianIds.add(tecnicoId)
+                    val token = tokenPara(tecnicoId)
+                    kotlinx.coroutines.runBlocking {
+                        ApiService.enviarInforme(token, taskId.toLong(), item.getJSONObject("payload"))
+                    }
+                    // Solo se elimina del outbox cuando el servidor confirmó la recepción.
+                    file.delete()
+                }.onFailure { e ->
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    falloAlgo = true
+                    OfflineSync.registrarError(
+                        (e as? ApiException)?.message ?: e.message ?: "Error inesperado al enviar un informe pendiente."
+                    )
+                }
             }
+
             val finishes = directory.listFiles { f -> f.name.startsWith("finish-") }?.sortedBy { it.name }.orEmpty()
             for (file in finishes) {
-                val item = JSONObject(file.readText())
-                val tecnicoId = item.getInt("tecnicoId")
-                technicianIds.add(tecnicoId)
-                val token = tokenPara(tecnicoId)
-                ApiService.token = token
-                kotlinx.coroutines.runBlocking { ApiService.cambiarEstadoTarea(item.getInt("tareaId"), "FINALIZADA") }
-                file.delete()
+                runCatching {
+                    val item = JSONObject(file.readText())
+                    val tareaId = item.getInt("tareaId")
+                    val tecnicoId = item.getInt("tecnicoId")
+                    technicianIds.add(tecnicoId)
+                    val token = tokenPara(tecnicoId)
+                    ApiService.token = token
+                    kotlinx.coroutines.runBlocking { ApiService.cambiarEstadoTarea(tareaId, "FINALIZADA") }
+                    file.delete()
+                }.onFailure { e ->
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    falloAlgo = true
+                    OfflineSync.registrarError(
+                        (e as? ApiException)?.message ?: e.message ?: "Error inesperado al finalizar una tarea pendiente."
+                    )
+                }
             }
+
+            tokenRestaurado = true
+            ApiService.token = tokenOriginal
+
+            // Los archivos con éxito ya se borraron; lo que quede sigue en el outbox para el próximo intento.
             technicianIds.forEach(OfflineSync::limpiarCredencialesSinPendientes)
-            OfflineSync.limpiarError()
-            Result.success()
+
+            return when {
+                !falloAlgo -> { OfflineSync.limpiarError(); Result.success() }
+                // Cualquier fallo (red o 4xx) queda en reintento: los envíos permanecen en el outbox y
+                // OfflineSync.initWithContext re-asocia credenciales frescas de la sesión al abrir la app.
+                else -> Result.retry()
+            }
         } catch (e: Exception) {
             OfflineSync.registrarError((e as? ApiException)?.message ?: e.message ?: "Error inesperado de sincronización.")
-            val code = (e as? ApiException)?.codigo
-            if (code == null || code == 408 || code == 429 || code >= 500) Result.retry() else Result.failure()
+            return Result.retry()
+        } finally {
+            if (!tokenRestaurado) ApiService.token = tokenOriginal
         }
     }
 }

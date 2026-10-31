@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aring.movil.data.OfflineSync
 import com.aring.movil.data.Repositorio
 import com.aring.movil.data.Tarea
 import com.aring.movil.data.Tecnico
@@ -33,8 +34,6 @@ import com.aring.movil.ui.theme.Violeta
 @Composable
 fun TareasTecnicoScreen(
     tecnico: Tecnico,
-    titulo: String,
-    subtitulo: String,
     onAbrirTarea: (Tarea) -> Unit,
 ) {
     val tareas = Repositorio.tareasDeTecnico(tecnico.id)
@@ -45,7 +44,7 @@ fun TareasTecnicoScreen(
             .padding(horizontal = 16.dp, vertical = 20.dp)
     ) {
         Text(
-            titulo,
+            "Tareas",
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
             fontSize = 26.sp,
@@ -54,13 +53,39 @@ fun TareasTecnicoScreen(
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            subtitulo,
+            "Entra a una tarea para iniciarla o retomarla.",
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
             color = TextoGris,
             fontSize = 14.sp
         )
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(12.dp))
+
+        val hayPendientes = runCatching { OfflineSync.hayPendientes() }.getOrDefault(false)
+        val ultimoError = runCatching { OfflineSync.ultimoError() }.getOrDefault("")
+        if (hayPendientes) {
+            val detalle = if (ultimoError.isNotBlank()) {
+                val pistaCredenciales =
+                    ultimoError.indexOf("contrase", 0, ignoreCase = true) >= 0 ||
+                        ultimoError.indexOf("Usuario o", 0, ignoreCase = true) >= 0
+                if (pistaCredenciales)
+                    "$ultimoError · Cierre sesión y vuelva a entrar para actualizar sus credenciales."
+                else
+                    "Último error: $ultimoError"
+            } else {
+                ""
+            }
+            Text(
+                "Pendiente de sincronizar · se enviará al recuperar conexión" +
+                    if (detalle.isNotBlank()) "\n$detalle" else "",
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 12.sp
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+        Spacer(Modifier.height(8.dp))
 
         if (tareas.isEmpty()) {
             Vacio("No tienes tareas asignadas.")

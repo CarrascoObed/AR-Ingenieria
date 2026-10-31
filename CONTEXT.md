@@ -1,6 +1,6 @@
 # CONTEXT.md — Contexto completo del proyecto AR-Ingeniería
 
-> Documento revisado el 2026-10-31 contrastando la implementación actual de `AR-Ingenieria/` hasta el commit `3f663a2` (`Support offline task completion and sync`).
+> Documento revisado el 2026-10-31 contrastando la implementación actual de `AR-Ingenieria/`; incluye cambios locales posteriores al commit `a95d69a` (solo pestaña Tareas para técnico, sin generar APK).
 > Fuente del análisis: `C:\Mis proyectos\AR-Ingenieria\AR-Ingenieria`
 > Propósito: dar todo el contexto del sistema (funcional, técnico y de negocio) a cualquier desarrollador, agente de IA o nuevo integrante del equipo.
 
@@ -290,7 +290,7 @@ App.kt
 │    └── POST /api/auth/login → AdminSesion | TecnicoSesion
 ├── ADMIN → MainScreen:  BarraNavegación con ids: Dashboard / Técnicos / Tareas
 └── TÉCNICO → MainScreenTecnico:
-      tabs: Inicio | Tareas | Documentos
+      única pestaña: Tareas
       pila: Lista → Detalle(tarea)
               ├→ IngresarTareaScreen (cabecera: elegir hasta 5 invitados) → tablero (POST /tareas/{id}/iniciar)
               └→ tablero de flujo → TableroSeleccion (tipo) → TableroFlujo(Registro→EvidenciasPrevias→Variables→
@@ -310,7 +310,7 @@ App.kt
 - **Autenticación de la cola:** guarda RUT y contraseña por técnico en preferencias privadas `aring_outbox_auth` mientras tenga envíos pendientes, para que la sincronización siga funcionando tras cerrar sesión. Al terminar su cola, borra esas credenciales. Al actualizar desde una versión previa intenta asociar el outbox existente con la sesión de técnico guardada. La pantalla permite cerrar sesión con cola pendiente; los informes siguen en espera.
 - **Envío del informe:** `EnviarInformeScreen` construye el JSON con `TableroRepository` (fotos Base64, JPEG q85 máx. 1280px vía `decodeSampledBitmap`) y lo pone en la cola local. La pantalla confirma que quedó guardado en el dispositivo; WorkManager realiza el POST cuando hay red. La cuenta local de tableros se incrementa para permitir finalizar aunque el worker ya haya subido el informe y retirado el archivo de la cola.
 - **Finalizar tarea** (cabecera, en `TableroSeleccion`): valida que haya al menos un tablero conocido (servidor o registrado localmente), guarda el marcador de finalización y muestra `TableroConfirmacion` indicando pendiente. Hasta que el backend confirme, la tarea local se muestra como finalizada con sincronización pendiente; no se debe interpretar ese estado local como confirmado por el servidor.
-- **Errores de sincronización:** `OfflineSync` conserva el último mensaje de error del servidor; `DocumentosTecnicoScreen` muestra el error y un botón para reintentar. No ofrece descargar informe de tareas que sigan pendientes, porque el documento del servidor aún no existe. Una vez sincronizadas, se descargan normalmente. El listado del administrador cambia cuando la petición de finalización llega al backend.
+- **Errores de sincronización:** `OfflineSync` conserva el último mensaje de error del servidor. El técnico puede reintentar desde la actualización de la barra superior o al abrir la app. La UI de técnico no descarga informes; solo el panel web usa las rutas de documentos. El listado del administrador cambia cuando la petición de finalización llega al backend.
 
 ### Cámara y anotación de evidencia
 - `PhotoBus` (singleton con `MutableStateFlow`) para comunicación pantalla↔cámara: `PhotoRequest(phased, category PREVIOUS|MEASUREMENT|CHECKLIST|POST, referenceId?, slotIndex, label)`.
@@ -322,7 +322,8 @@ App.kt
 - `TareasTecnicoScreen`: tareas propias, chips "Invitado" y "Pendiente de sincronizar" para cierres locales aún no confirmados; clic → Detalle.
 - `DetalleTareaTecnico`: tarjeta datos + **"Ir a la dirección"** (intento `geo:0,0?q=dirección` con funcionalidad de maps) + "Ingresar/Retomar tarea".
 - `IngresarTareaScreen` (cabecera): si ya en proceso muestra fecha inicio + "Retomarás la tarea desde el último punto guardado."; si no, selector de hasta **5 invitados** ("Invitaciones: N/5") → `Iniciar tarea`.
-- `DocumentosTecnicoScreen`: lista tareas finalizadas y ya sincronizadas (ocultables mediante SharedPreferences `ocultas_finalizadas`) + **"Descargar informe"** con `ActivityResultContracts.CreateDocument("docx")` → `GET /api/documentos/informe-tarea.docx?tareaId=` y `Write` vía `ContentResolver`. Las tareas con sync pendiente aparecen con aviso, no como descargables. Si la cola falla, muestra el último error del worker y permite reintentar.
+- El rol técnico ya no tiene pestañas Inicio ni Documentos, ni función móvil para descargar documentos. La descarga de informes continúa disponible en el panel web del administrador; el endpoint del backend sigue perteneciendo a esa funcionalidad.
+- La pantalla Tareas muestra los cierres locales todavía pendientes de sincronizar. `OfflineSync` guarda el último error; el técnico puede pedir un reintento con el botón de actualización de la barra superior o al abrir la aplicación. Al quitar la pantalla Documentos, el error ya no se muestra en un banner dedicado.
 
 ### UI kit propio en Compose (`ui/components/Componentes.kt`)
 `LogoRayo`, `IconoOjo`, `Avatar`, `ChipEstado` (rojo/amarillo/verde), `ChipTipo`, `ChipLegenda`, `Tarjeta`, `BannerError/BannerOk`, `Cargando`, `Vacio`, `BtnPrimario/BtnSecundario/BtnRiesgo`, `ModalDialog`, `ConfirmarDialog`, `SeccionFormulario`, `CampoTexto` (BasicTextField custom con ojo/halo), `CampoSelect` (DropdownMenu medido), `HorizontalSeparador`. Tema `ARIngMovilTheme` light-only con colorscheme primario violeta.

@@ -1,7 +1,6 @@
 package com.aring.movil.data
 
 import android.graphics.Bitmap
-import android.net.Uri
 import android.util.Base64
 import com.aring.movil.BuildConfig
 import com.aring.movil.ui.panel.common.decodeSampledBitmap
@@ -18,8 +17,6 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class ApiException(message: String, val codigo: Int? = null) : Exception(message)
-
-data class DescargaInforme(val bytes: ByteArray, val nombreArchivo: String)
 
 object ApiService {
 
@@ -165,55 +162,6 @@ object ApiService {
             }
             runCatching { JSONObject(body) }.getOrDefault(JSONObject())
         }
-    }
-
-    suspend fun tablerosTarea(token: String, tareaId: Int): JSONArray =
-        parsearArreglo(
-            ejecutar(
-                "GET",
-                "/api/tareas/$tareaId/tableros",
-                tokenOverride = token
-            )
-        )
-
-    suspend fun informeTarea(tareaId: Int): DescargaInforme =
-        withContext(Dispatchers.IO) {
-            val request = Request.Builder()
-                .url("$BASE_URL/api/documentos/informe-tarea.docx?tareaId=$tareaId")
-                .addHeader("Authorization", "Bearer ${token ?: ""}")
-                .get()
-                .build()
-
-            client.newCall(request).execute().use { resp ->
-                if (!resp.isSuccessful) {
-                    val body = resp.body?.string().orEmpty()
-                    val mensaje = runCatching {
-                        JSONObject(body).optString("mensaje")
-                    }.getOrNull()
-
-                    throw ApiException(
-                        mensaje?.takeIf { it.isNotBlank() }
-                            ?: "Error del servidor al generar el informe (${resp.code}).",
-                        resp.code
-                    )
-                }
-                val bytes = resp.body?.bytes()
-                    ?: throw ApiException("Respuesta vacía del servidor.")
-                DescargaInforme(
-                    bytes = bytes,
-                    nombreArchivo = nombreArchivo(resp.header("Content-Disposition"))
-                )
-            }
-        }
-
-    private fun nombreArchivo(contentDisposition: String?): String {
-        if (contentDisposition.isNullOrBlank()) return "informe-tarea.docx"
-        val encoded = Regex("filename\\*\\s*=\\s*UTF-8''([^;]+)", RegexOption.IGNORE_CASE)
-            .find(contentDisposition)?.groupValues?.get(1)?.trim()?.trim('"')
-        if (!encoded.isNullOrBlank()) return Uri.decode(encoded)
-        val simple = Regex("filename\\s*=\\s*\\\"?([^\\\";]+)", RegexOption.IGNORE_CASE)
-            .find(contentDisposition)?.groupValues?.get(1)?.trim()
-        return simple?.takeIf { it.isNotBlank() } ?: "informe-tarea.docx"
     }
 
     fun fotoBase64(path: String?): String? {

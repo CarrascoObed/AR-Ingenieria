@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
@@ -23,6 +22,7 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.aring.movil.data.Admin
 import com.aring.movil.data.ApiException
@@ -54,7 +54,6 @@ import com.aring.movil.ui.screens.LoginScreen
 import com.aring.movil.ui.screens.TareasScreen
 import com.aring.movil.ui.screens.TecnicosScreen
 import com.aring.movil.ui.tecnico.DetalleTareaTecnico
-import com.aring.movil.ui.tecnico.DocumentosTecnicoScreen
 import com.aring.movil.ui.tecnico.IngresarTareaScreen
 import com.aring.movil.ui.tecnico.TareasTecnicoScreen
 import com.aring.movil.ui.theme.FondoGris
@@ -69,9 +68,7 @@ private val ITEMS_ADMIN = listOf(
 )
 
 private val ITEMS_TECNICO = listOf(
-    "Inicio" to Icons.Filled.Home,
     "Tareas" to Icons.Filled.List,
-    "Documentos" to Icons.Filled.Description,
 )
 
 @Composable
@@ -230,7 +227,7 @@ private val PantallaTecSaver = listSaver<PantallaTec, String>(
 
 @Composable
 fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    val context = LocalContext.current
     var refrescando by remember { mutableStateOf(false) }
     var notifAbierto by remember { mutableStateOf(false) }
     var confirmarSalida by remember { mutableStateOf(false) }
@@ -281,6 +278,7 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                 onRefresh = {
                     scope.launch {
                         refrescando = true
+                        OfflineSync.reintentarPendientes(context)
                         runCatching { Repositorio.cargarTecnico(tecnico.id) }
                         refrescando = false
                     }
@@ -298,20 +296,10 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (val p = pantalla) {
                 is PantallaTec.Lista -> {
-                    if (tab == 2) {
-                        DocumentosTecnicoScreen(tecnico = tecnico)
-                    } else {
-                        TareasTecnicoScreen(
-                            tecnico = tecnico,
-                            titulo = if (tab == 0) "Inicio" else "Tareas",
-                            subtitulo = if (tab == 0) {
-                                "Tus tareas asignadas y su estado."
-                            } else {
-                                "Entra a una tarea para iniciarla o retomarla."
-                            },
-                            onAbrirTarea = { pantalla = PantallaTec.Detalle(it) }
-                        )
-                    }
+                    TareasTecnicoScreen(
+                        tecnico = tecnico,
+                        onAbrirTarea = { pantalla = PantallaTec.Detalle(it) }
+                    )
                 }
                 is PantallaTec.Detalle -> {
                     val tarea = tareaActual(p.tarea)
@@ -363,8 +351,7 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                 )
                 is PantallaTec.Confirmacion -> TableroConfirmacion(
                     tarea = tareaActual(p.tarea),
-                    onIrAlInicio = {
-                        tab = 0
+                    onVolverATareas = {
                         volver()
                     }
                 )
@@ -374,11 +361,8 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
         if (!ocultarTopBar) {
             BarraNavegacion(
                 items = ITEMS_TECNICO,
-                actual = tab,
-                onSeleccionar = {
-                    tab = it
-                    volver()
-                }
+                actual = 0,
+                onSeleccionar = { volver() }
             )
         }
     }

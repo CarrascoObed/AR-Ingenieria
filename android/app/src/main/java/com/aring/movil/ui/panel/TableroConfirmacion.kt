@@ -34,7 +34,7 @@ import com.aring.movil.ui.theme.VioletaClaro
 @Composable
 fun TableroConfirmacion(
     tarea: Tarea,
-    onIrAlInicio: () -> Unit
+    onVolverATareas: () -> Unit
 ) {
     Column(
         Modifier
@@ -79,9 +79,9 @@ fun TableroConfirmacion(
         )
         Spacer(Modifier.height(32.dp))
         BtnPrimario(
-            texto = "Ir al inicio",
+            texto = "Volver a tareas",
             modifier = Modifier.fillMaxWidth(),
-            onClick = onIrAlInicio
+            onClick = onVolverATareas
         )
     }
 }
