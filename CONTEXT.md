@@ -1,6 +1,6 @@
 # CONTEXT.md — Contexto completo del proyecto AR-Ingeniería
 
-> Documento revisado el 2026-10-31 contrastando la implementación actual de `AR-Ingenieria/`.
+> Documento revisado el 2026-10-31 contrastando la implementación actual de `AR-Ingenieria/` hasta el commit `3f663a2` (`Support offline task completion and sync`).
 > Fuente del análisis: `C:\Mis proyectos\AR-Ingenieria\AR-Ingenieria`
 > Propósito: dar todo el contexto del sistema (funcional, técnico y de negocio) a cualquier desarrollador, agente de IA o nuevo integrante del equipo.
 
@@ -11,7 +11,7 @@
 AR-Ingeniería es una empresa de **mantenimiento eléctrico**. El sistema cubre el ciclo completo del trabajo:
 
 1. Un **administrador** (web/panel) crea **tareas de mantenimiento** asociadas a una dirección y un recinto, y asigna un técnico de cabecera con su cédula chilena (RUT).
-2. Los **técnicos** utilizan una **app Android (móvil)** para iniciar la tarea, invitar hasta 5 ayudantes, tomar fotos con la cámara, medir variables eléctricas del tablero (multímetro) y llenar un checklist de inspección por cada **tablero monofásico o trifásico**, luego pueden finalizar la tarea.
+2. Los **técnicos** utilizan una **app Android (móvil)** para recibir e iniciar la tarea con conexión, invitar hasta 5 ayudantes, y completar inspecciones monofásicas o trifásicas. Los formularios, fotos y tareas descargadas se conservan en el teléfono, de modo que el trabajo iniciado puede continuar sin Internet; informes y finalización se sincronizan al recuperar conexión.
 3. El **panel web** permite revisar el dashboard con los estados, gestionar técnicos/tareas, recibir notificaciones, y descargar informes en **Excel (XLSX) y Word (DOCX)**.
 4. Un rol **SUPER** (superusuario) gestiona administradores, habilita/deshabilita pantallas del menú, administra tareas y técnicos y descarga informes individuales y paquetes ZIP por período.
 
@@ -42,7 +42,7 @@ AR-Ingenieria/
 | API | `backend/src/main/java/com/aring/...` | Spring Boot (Web, Data JPA, Security, Validation), Lombok |
 | BD | PostgreSQL 16 (Docker) | Hibernate `ddl-auto=update` |
 | Panel web | `frontend/src/**` | React, axios, react-router v6, recharts, lucide-react |
-| App móvil | `android/app/src/main/java/com/aring/movil/...` | Kotlin 2.0.21, Compose (BOM 2024.12.01), CameraX 1.4.1, OkHttp crudo, EXIF 1.3.7, SharedPreferences, SIN Navigation-Compose (navegación manual con estado) |
+| App móvil | `android/app/src/main/java/com/aring/movil/...` | Kotlin 2.0.21, Compose (BOM 2024.12.01), CameraX 1.4.1, OkHttp, EXIF 1.3.7, WorkManager para cola offline, SharedPreferences; navegación manual |
 
 ---
 
@@ -69,12 +69,20 @@ docker compose up --build db backend
 cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
 
-El `vite.config.js` hace **proxy de `/api` → http://localhost:8080** (`host: 0.0.0.0`, puerto 5173). El `nginx.conf` de producción enrutará `location /api/` a `http://backend:8080/api/` y sirve la SPA con `try_files ... /index.html`.
+El `vite.config.js` hace **proxy de `/api` → http://localhost:8080** (`host: 0.0.0.0`, puerto 5173). El `frontend/nginx.conf` de producción enruta `location /api/` a `http://backend:8080/api/` y sirve la SPA con `try_files ... /index.html`.
+
+### Acceso remoto observado en el servidor local (2026-10-31)
+
+- El servidor Linux `ar-ingenieria` tiene Tailscale instalado, habilitado y conectado; en las capturas su IP Tailscale era `100.115.34.113`.
+- Tailscale Funnel quedó activado para el puerto local **3000** (contenedor frontend/Nginx): `https://ar-ingenieria.taila89688.ts.net/`. Nginx sirve la web y pasa `/api/` al backend Docker. El acceso público funciona desde redes externas sin instalar Tailscale en cada móvil, mientras servidor, conexión a Internet y Funnel permanezcan activos.
+- Funnel no publica directamente PostgreSQL ni el puerto 8080. La aplicación móvil usa el mismo origen HTTPS y la ruta `/api` proxificada por Nginx.
+- Verificación local en el servidor: `sudo systemctl status tailscaled`, `sudo tailscale status` y `sudo tailscale funnel status`. El estado mostrado en las capturas no garantiza que Funnel siga activo hoy; comprobarlo si falla el acceso.
+- El móvil Android necesita instalar el APK actualizado de la app; el acceso externo a la web se realiza con el navegador normal.
 
 ### La app Android
 
-- `ApiService.BASE_URL` usa `BuildConfig.API_BASE_URL`, configurada al compilar con la propiedad Gradle `API_BASE_URL`; el valor por defecto actual es `http://192.168.1.22:8080`. Para emulador se puede compilar con `-PAPI_BASE_URL=http://10.0.2.2:8080`.
-- Manifest con `usesCleartextTraffic="true"` (API HTTP sin TLS), permiso `CAMERA`.
+- `ApiService.BASE_URL` usa `BuildConfig.API_BASE_URL`, configurable mediante Gradle `-PAPI_BASE_URL=...`; valor por defecto de producción: `https://ar-ingenieria.taila89688.ts.net` (HTTPS Funnel → Nginx → `/api` backend). Para desarrollo/emulador se puede sobreescribir, por ejemplo `-PAPI_BASE_URL=http://10.0.2.2:8080`.
+- Manifest con permisos `INTERNET` y `CAMERA`; `usesCleartextTraffic="true"` sigue habilitado para pruebas HTTP locales, aunque el valor predeterminado usa HTTPS.
 - `minSdk 26 / targetSdk 35 / Java 17` · versionCode 1 · versionName 1.0 · AGP 8.7.3 · Gradle wrapper 8.12.
 
 ---
@@ -94,7 +102,7 @@ El login (`POST /api/auth/login`) busca en este orden: Admin por `username` → 
 - **AUTENTICACIÓN:** JWT (JJWT 0.12.6, HMAC), expiración **24 h** (`app.jwt.expiration-ms=86400000`), secret por defecto en `application.yml` (override vía `JWT_SECRET`). Header `Authorization: Bearer <token>`.
   - Claims del token: `rol` (`ROLE_ADMIN` / `ROLE_SUPER` / `ROLE_TECNICO`), `tecnicoId` (solo técnicos), `nombre`, `apellido`, subject = username o RUT.
   - Única ruta pública: `POST /api/auth/login`. Todo lo demás exige token. `@PreAuthorize("hasRole('SUPER')")` protege `/api/super/**`.
-  - `SecurityFilterChain` stateless, CSRF off; la API exige autenticación salvo el login y `/api/super/**` además exige rol SUPER. CORS permite `localhost:*`, `127.0.0.1:*` y las IPs LAN codificadas en `SecurityConfig` (`192.168.1.1`, `.12`, `.13`, `.22`).
+  - `SecurityFilterChain` stateless, CSRF off; la API exige autenticación salvo el login y `/api/super/**` además exige rol SUPER. CORS permite `localhost:*`, `127.0.0.1:*`, las IPs LAN codificadas (`192.168.1.1`, `.12`, `.13`, `.22`) y `https://ar-ingenieria.taila89688.ts.net` para el panel web. CORS aplica a navegador; el cliente Android nativo usa HTTPS/OkHttp.
 - **FRONTEND web:** el panel es **exclusivo de administradores y superusuarios**; si un técnico intenta loguear web recibe "Acceso restringido: esta aplicación es solo para administradores." Guardas: `RequirePanelAdmin` (admin o super), `RequireAdmin`, `RequireSuper`, `PantallaHabilitada(nombre)`.
 - **APP Android:** autologin por rol: si Prefs tiene sesiones de admin o de técnico arranca en `MainScreen` o `MainScreenTecnico` (exclusión mutua de roles).
   - Flujo del técnico: pilas de pantallas preds `PantallaTec` con listSaver (sobrevive rotación y muerte de proceso).
@@ -133,13 +141,13 @@ Errores = `{ "mensaje": "..." }` (`ApiExceptionHandler`, catch-all en 500).
 | POST | `/tareas` | Solo `MANTENIMIENTO` (400 en otro tipo) — código gen `M-0001` con **lock pesimista** sobre `SecuenciaTarea` |
 | POST | `/tareas/{id}/iniciar` | Body `{ayudantesIds:[Long]}` — crea notificaciones: `TAREA_INICIADA` al cabecera e `INVITACION` a los ayudantes |
 | PUT | `/tareas/{id}` | Cambia técnico de cabecera (solo si `NO_INICIADA`) |
-| PUT | `/tareas/{id}/estado` | `{estado}` — Transiciones válidas: `NO_INICIADA→EN_PROCESO`, `EN_PROCESO→FINALIZADA`; esta última crea notificación global `TAREA_FINALIZADA`; 400 fallback "Transición de estado no permitida." |
+| PUT | `/tareas/{id}/estado` | `{estado}` — Transiciones válidas: `NO_INICIADA→EN_PROCESO`, `EN_PROCESO→FINALIZADA`; finalizar una tarea ya `FINALIZADA` ahora devuelve la tarea sin duplicar notificación (idempotencia para reintentos); 400 fallback "Transición de estado no permitida." |
 | DELETE | `/tareas/{id}` | Solo si `NO_INICIADA` |
 
 ### Tableros (`/api/tareas/{tareaId}/tableros`)
 | Método | Ruta | Nota |
 |---|---|---|
-| POST | `/tareas/{tareaId}/tableros` | Payload con medición, checklist, imágenes (base64), observaciones → guarda `InformeTablero`, suma 1 a `tablerosRealizados` |
+| POST | `/tareas/{tareaId}/tableros` | Payload con medición, checklist, imágenes (base64), observaciones y `clientOperationId` opcional. La clave de operación tiene índice único; repetir una clave para la misma tarea devuelve el informe existente y evita duplicar el tablero/contador. Reusar la clave en otra tarea produce 409. |
 | GET | `/tareas/{tareaId}/tableros` | Lista los tableros de la tarea |
 
 ### Dashboard, documentos, notificaciones, pantallas y Super
@@ -182,7 +190,7 @@ Todas las entidades son `Long id` con `GenerationType.IDENTITY`. Lombok `@Getter
 - **PantallaConfig** (`pantalla_config`): `nombre` UNIQUE (`DASHBOARD|TECNICOS|TAREAS|DOCUMENTOS|CLIENTES`), `habilitada`.
 
 ### Informes de tableros (núcleo de la evidencia)
-- **InformeTablero** (`informe_tablero`): `tarea → Tarea (FK)`, `tipoTablero (TipoTablero)`, `tamanio` (nullable, tamaño del tablero trifásico: Pequeño/Mediano/Grande/Especial), `descripcion`, `ubicacion`, `nivel`, `reapriete`, `aseo`, `tecnico → Tecnico (nullable = "Responsable Mantenimiento" del informe)`, `fechaCreacion`. Con **4 colecciones `cascade ALL / orphanRemoval`** y FK `informe_id`.
+- **InformeTablero** (`informe_tablero`): `tarea → Tarea (FK)`, `tipoTablero (TipoTablero)`, `tamanio` (nullable, tamaño del tablero trifásico: Pequeño/Mediano/Grande/Especial), `descripcion`, `ubicacion`, `nivel`, `reapriete`, `aseo`, `tecnico → Tecnico (nullable = "Responsable Mantenimiento" del informe)`, `fechaCreacion`, `clientOperationId` (nullable, único, clave de idempotencia móvil). Con **4 colecciones `cascade ALL / orphanRemoval`** y FK `informe_id`.
 - **MedicionTablero** (`medicion_tablero`): `variableId`, `label`, `unit`, `valor`, `fotoBase64 (text)`.
 - **ChecklistTablero** (`checklist_tablero`): `itemId`, `label`, `status` (p.ej. "OK"), `fotoBase64`.
 - **ImagenTablero** (`imagen_tablero`): `categoria` ("PREVIA"/"POSTERIOR"), `indice`, `base64 (text)`.
@@ -206,7 +214,7 @@ Todas las entidades son `Long id` con `GenerationType.IDENTITY`. Lombok `@Getter
 - Cambios de estado, edición de cabecera y borrado **solo con estado `NO_INICIADA`** (si no, 400).
 - `TecnicoService.eliminar`: validaciónstrict de 2 checks (cabecera ≠ FINALIZADA → 409 con mensaje como "No se puede eliminar: el técnico está invitado a tareas en curso." / cabecera especial "el técnico tiene tareas en curso asignadas."), luego limpieza (usuario, invitaciones via SQL nativo, tableros del técnico, delete).
 - `AdminService`: creación/actualizar/eliminar; username con trim; BCrypt; 409 "Ya existe un administrador con el usuario ingresado.".
-- `TableroService.crear`: convierte `TableroRequest` → `InformeTablero` + colecciones; asigna el técnico responsable con prioridad al `tecnicoId **del JWT**` (token re-parseado en el controller, no usa `SecurityContextHolder` porque el principal es el RUT y el `tecnicoId` vive solo en claims); suma `tablerosRealizados`.
+- `TableroService.crear`: convierte `TableroRequest` → `InformeTablero` + colecciones; asigna el técnico responsable con prioridad al `tecnicoId **del JWT**` (token re-parseado en el controller, no usa `SecurityContextHolder` porque el principal es el RUT y el `tecnicoId` vive solo en claims); suma `tablerosRealizados`. Si llega un `clientOperationId` ya registrado para la misma tarea devuelve el informe previo sin volver a incrementar el contador.
 
 ### Documentos (`DocumentoService` — genera XLSX/DOCX con Apache POI)
 ⚠️ **No se usa OpenPDF** (dependencia declarada en el `pom.xml` pero sin uso); el "informe 'PDF'" del README es en realidad un **Documento Word (.docx)**.
@@ -222,7 +230,19 @@ Todas las entidades son `Long id` con `GenerationType.IDENTITY`. Lombok `@Getter
 - **Nota de build:** el Dockerfile del backend compila con `-DskipTests` (los tests no corren en el build Docker).
 
 ### Configuración y despliegue
-`application.yml`: `spring.jackson.default-property-inclusion: non_null` · `open-in-view: false` · `ddl-auto: update` · servidor 8080. PostgreSQL y los servicios se levantan con Compose; `.env.example` solo contiene el marcador para el token de Cloudflare Tunnel. `docker-compose.cloudflare.yml` agrega `cloudflared` y espera el frontend; instrucciones están en `deployment/CLOUDFLARE_TUNNEL.md`. La URL de API Android se configura con Gradle `API_BASE_URL` (`BuildConfig`); el valor por defecto está en `android/app/build.gradle.kts`.
+`application.yml`: `spring.jackson.default-property-inclusion: non_null` · `open-in-view: false` · `ddl-auto: update` · servidor 8080. PostgreSQL y los servicios se levantan con Compose. `docker-compose.cloudflare.yml`/`deployment/CLOUDFLARE_TUNNEL.md` documentan el túnel opcional Cloudflare. El servidor observado por capturas usa Tailscale Funnel, no Cloudflare: Funnel publica el frontend/Nginx en el puerto 3000, y Nginx proxifica `/api/` al contenedor backend. URL observada: `https://ar-ingenieria.taila89688.ts.net`.
+
+La app Android usa esa URL HTTPS como predeterminada; la propiedad Gradle `API_BASE_URL` (`BuildConfig`) permite sobreescribirla. En el servidor Linux (si el checkout está en `~/Desktop/AR-Ingenieria`), actualizar y reconstruir el backend con:
+
+```bash
+cd ~/Desktop/AR-Ingenieria
+git pull origin main
+sudo docker compose up -d --build backend
+sudo docker compose ps
+sudo docker compose logs --tail=100 backend
+```
+
+El commit `3f663a2` (`Support offline task completion and sync`) fue subido a `origin/main`. No se ha verificado desde este repositorio si esos cambios ya fueron desplegados en el servidor. El Dockerfile del backend compila Maven (`-DskipTests`) y al iniciar Hibernate `ddl-auto=update` agrega la columna/índice de idempotencia. El frontend no requiere reconstrucción para este cambio de sincronización.
 
 Docker backend: imagen base `maven:3.9-eclipse-temurin-21` build + `eclipse-temurin:21-jre` runtime; `.dockerignore` excluye `target/`. Imagen de salida `aring-backend-1.0.0.jar`.
 
@@ -285,9 +305,12 @@ App.kt
   - **Trifásico:** **11 variables** (corrientes I(1..3), voltajes F1-F2/F1-F3/F2-F3/F1-N/F2-N/F3-N/N-T, Temperatura) + **21 checks** + campo `tamanioTablero` (Pequeño/Mediano/Grande/Especial).
   - `Reapriete` y `Aseo` = solo selector `Sí / No / N/A` (por fase de Variables).
   - **Validación (6 fases):** F1 datos del registro (trifásico también requiere tamaño), F2 fotos previas (2 obligatorias), F3 **foto por cada variable** (`"Debe tomar la fotografía de {label}"` — el input de valor se oculta (`showValueInput = false`) pero campos Numéricos no se exigidos) + Reapriete + Aseo, F4 checklist con estado por item y **C/R obliga foto** ("Evidencia fotográfica requerida para..."), F5 2 fotos posteriores, F6 observaciones libres.
-- **Persistencia local:** `TableroDraftStore` (SharedPreferences `"aring_tableros"`, clave `draft_{tareaId}_{tipo}`), estado completo serializado a JSON (así se sobrevive la muerte del proceso). Cada mutación del ViewModel persiste **inmediatamente**.
-- **Envío del informe:** `EnviarInformeScreen` re-loguea el técnico (`loginTecnico(rut, password)`) y `POST /api/tareas/{id}/tableros` con build de JSON por `TableroRepository` (todo embebido en Base64 — JPEG q85 máx 1280px vía `decodeSampledBitmap` sobre archivo original, con `OkHttpClient` timeouts **write 90s**). Estados `Inactivo | Enviando | Exito | Error` con pantalla de reintento y bloqueo de Back durante envío.
-- **Finalizar tarea** (cabecera, en `TableroSeleccion`): envia drafts pendientes si alguno; si ya hay tableros en el servidor iguales a la tarea (por el conteo `tablerosRealizados`) procede; si no hay tableros → error "Esta tarea no tiene tableros inspeccionados..." → `PUT /tareas/{id}/estado FINALIZADA` → `TableroConfirmacion`.
+- **Persistencia local:** `TableroDraftStore` (SharedPreferences `"aring_tableros"`, clave `draft_{tareaId}_{tipo}`) guarda cada cambio del formulario; `OfflineTaskCache` conserva en SharedPreferences la última lista de tareas descargada para reabrirla sin red. Las fotos quedan en `filesDir/photos/`.
+- **Outbox/sincronización:** `OfflineSync` guarda cada informe JSON completo (incluidas fotos Base64) en archivos atómicos bajo `filesDir/offline-outbox/`, y un marcador `finish-{tareaId}.json` para finalizar después. WorkManager (`NetworkType.CONNECTED`) sube informes antes de pedir al backend marcar la tarea finalizada; usa reintentos y la clave `clientOperationId` UUID para que un envío repetido no duplique tableros. La cola se retoma al abrir la app y cada informe/tarea queda persistido hasta recibir confirmación del servidor.
+- **Autenticación de la cola:** guarda RUT y contraseña por técnico en preferencias privadas `aring_outbox_auth` mientras tenga envíos pendientes, para que la sincronización siga funcionando tras cerrar sesión. Al terminar su cola, borra esas credenciales. Al actualizar desde una versión previa intenta asociar el outbox existente con la sesión de técnico guardada. La pantalla permite cerrar sesión con cola pendiente; los informes siguen en espera.
+- **Envío del informe:** `EnviarInformeScreen` construye el JSON con `TableroRepository` (fotos Base64, JPEG q85 máx. 1280px vía `decodeSampledBitmap`) y lo pone en la cola local. La pantalla confirma que quedó guardado en el dispositivo; WorkManager realiza el POST cuando hay red. La cuenta local de tableros se incrementa para permitir finalizar aunque el worker ya haya subido el informe y retirado el archivo de la cola.
+- **Finalizar tarea** (cabecera, en `TableroSeleccion`): valida que haya al menos un tablero conocido (servidor o registrado localmente), guarda el marcador de finalización y muestra `TableroConfirmacion` indicando pendiente. Hasta que el backend confirme, la tarea local se muestra como finalizada con sincronización pendiente; no se debe interpretar ese estado local como confirmado por el servidor.
+- **Errores de sincronización:** `OfflineSync` conserva el último mensaje de error del servidor; `DocumentosTecnicoScreen` muestra el error y un botón para reintentar. No ofrece descargar informe de tareas que sigan pendientes, porque el documento del servidor aún no existe. Una vez sincronizadas, se descargan normalmente. El listado del administrador cambia cuando la petición de finalización llega al backend.
 
 ### Cámara y anotación de evidencia
 - `PhotoBus` (singleton con `MutableStateFlow`) para comunicación pantalla↔cámara: `PhotoRequest(phased, category PREVIOUS|MEASUREMENT|CHECKLIST|POST, referenceId?, slotIndex, label)`.
@@ -296,10 +319,10 @@ App.kt
 - Corrección de **orientación EXIF** en la subida (dependencia `androidx.exifinterface`).
 
 ### Pantallas del técnico
-- `TareasTecnicoScreen`: tareas propias (sin finalizadas), chips "Invitado", clic → Detalle.
+- `TareasTecnicoScreen`: tareas propias, chips "Invitado" y "Pendiente de sincronizar" para cierres locales aún no confirmados; clic → Detalle.
 - `DetalleTareaTecnico`: tarjeta datos + **"Ir a la dirección"** (intento `geo:0,0?q=dirección` con funcionalidad de maps) + "Ingresar/Retomar tarea".
 - `IngresarTareaScreen` (cabecera): si ya en proceso muestra fecha inicio + "Retomarás la tarea desde el último punto guardado."; si no, selector de hasta **5 invitados** ("Invitaciones: N/5") → `Iniciar tarea`.
-- `DocumentosTecnicoScreen`: lista tareas `Finalizadas` (ocultables, localStorage ocultas) + **"Descargar informe"** con `ActivityResultContracts.CreateDocument("docx")` → `GET /api/documentos/informe-tarea.docx?tareaId=` y `Write` via `ContentResolver`.
+- `DocumentosTecnicoScreen`: lista tareas finalizadas y ya sincronizadas (ocultables mediante SharedPreferences `ocultas_finalizadas`) + **"Descargar informe"** con `ActivityResultContracts.CreateDocument("docx")` → `GET /api/documentos/informe-tarea.docx?tareaId=` y `Write` vía `ContentResolver`. Las tareas con sync pendiente aparecen con aviso, no como descargables. Si la cola falla, muestra el último error del worker y permite reintentar.
 
 ### UI kit propio en Compose (`ui/components/Componentes.kt`)
 `LogoRayo`, `IconoOjo`, `Avatar`, `ChipEstado` (rojo/amarillo/verde), `ChipTipo`, `ChipLegenda`, `Tarjeta`, `BannerError/BannerOk`, `Cargando`, `Vacio`, `BtnPrimario/BtnSecundario/BtnRiesgo`, `ModalDialog`, `ConfirmarDialog`, `SeccionFormulario`, `CampoTexto` (BasicTextField custom con ojo/halo), `CampoSelect` (DropdownMenu medido), `HorizontalSeparador`. Tema `ARIngMovilTheme` light-only con colorscheme primario violeta.
@@ -323,10 +346,10 @@ El estado `leida` se persiste en backend. Al desplegar la lista de notificacione
 ## 12. Riesgos / deudas técnicas detectadas
 
 1. **Secretos en claro**: JWT secret por defecto y contraseña inicial del superusuario están en el código; contraseñas/credenciales/tokens en `SharedPreferences` Android sin `EncryptedSharedPreferences`; "Recordar credenciales" guardado en texto plano en `localStorage`. No guardar el token JWT de autenticación dentro de resultados k6 que se compartan.
-2. **HTTP sin TLS en móvil**: `usesCleartextTraffic="true"`; aunque `API_BASE_URL` es configurable al compilar, el valor por defecto usa HTTP en la red local. Para producción, usar HTTPS.
+2. **Cleartext HTTP permitido en móvil**: `usesCleartextTraffic="true"` se conserva para desarrollo local, aunque el `API_BASE_URL` predeterminado ya usa HTTPS Funnel. No compilar producción con una URL HTTP pública.
 3. **Payloads grandes**: fotos Base64 embebidas en JSON (write timeout 90 s en OkHttp) — considerar multipart o redimensionado menor si el dataset crece.
 4. **Sin Retrofit/Kotlinx-serialization**: JSON construido manualmente con `org.json` — no se usa un modelo de fallo tipado (mejorar con serialización de tipo seguro si continúa el desarrollo).
-5. Cobertura de tests limitada (sin tests de `TableroService`, `NotificacionService`, pantallas, o security/JWT; build Docker usa `-DskipTests` para ahorrar build time).
+5. Cobertura de tests limitada (sin tests de `TableroService`, `NotificacionService`, pantallas, WorkManager/offline o security/JWT; build Docker usa `-DskipTests`). El APK Android se compiló correctamente en el entorno de desarrollo; los cambios del backend no se compilaron localmente porque no había Maven instalado (el Dockerfile sí contiene Maven para construirlo en el servidor).
 6. La actualización del menú del superusuario usa actualización optimista; conviene verificar que la UI revierta el interruptor si falla `PUT /super/pantallas`.
 7. El panel web permite finalizar una tarea en proceso directamente; el flujo móvil del técnico valida y envía los tableros antes de finalizar.
 8. El filtro por código en endpoints de informes permanece por compatibilidad; la pantalla de Documentos ahora prioriza búsqueda de edificio y selección de una tarea finalizada.
