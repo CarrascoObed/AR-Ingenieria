@@ -181,8 +181,5 @@
             "med": 3.7044875,
             "max": 156.754303
         }
-    },
-    "setup_data": {
-        "token": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiIyOTA5NDcyOCIsIm5vbWJyZSI6IlN1cGVyIiwicm9sIjoiUk9MRV9TVVBFUiIsImFwZWxsaWRvIjoiVXN1YXJpbyIsImlhdCI6MTc5MzQwNjYyMCwiZXhwIjoxNzkzNDkzMDIwfQ.N-wHlG3SRDGzzFen3OMMFzirwYB0g2URHl24Fig1hGsLrKaQaBXQMXX974_HzgavRROFwsLIs1byFhJpDqfI2g"
     }
 }

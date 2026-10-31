@@ -3,6 +3,7 @@ package com.aring.movil.data
 import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Base64
+import com.aring.movil.BuildConfig
 import com.aring.movil.ui.panel.common.decodeSampledBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,11 +24,10 @@ data class DescargaInforme(val bytes: ByteArray, val nombreArchivo: String)
 object ApiService {
 
     /**
-     * Dirección del backend.
-     * - Dispositivo físico / misma red Wi-Fi: IP local del servidor que corre el backend.
-     * - Emulador Android: usar http://10.0.2.2:8080 (alias al localhost de la PC).
+     * Dirección del backend, configurable al compilar mediante la propiedad Gradle API_BASE_URL.
+     * Por defecto conserva la dirección local del servidor para pruebas en la red Wi-Fi.
      */
-    const val BASE_URL = "http://192.168.1.22:8080"
+    const val BASE_URL = BuildConfig.API_BASE_URL
 
     @Volatile
     var token: String? = null
