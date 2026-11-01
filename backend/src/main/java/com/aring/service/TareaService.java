@@ -154,6 +154,11 @@ public class TareaService {
     @Transactional
     public Tarea iniciar(Long id, IniciarRequest request) {
         Tarea tarea = buscarOError(id);
+        if (tarea.getEstado() == EstadoTarea.EN_PROCESO) {
+            // Idempotencia para reintentos de la sincronización móvil: si la tarea
+            // ya está en proceso se devuelve tal cual, sin duplicar notificaciones.
+            return tarea;
+        }
         if (tarea.getEstado() != EstadoTarea.NO_INICIADA) {
             throw new ApiException("Solo se puede iniciar una tarea que está 'No iniciada'.", HttpStatus.BAD_REQUEST);
         }

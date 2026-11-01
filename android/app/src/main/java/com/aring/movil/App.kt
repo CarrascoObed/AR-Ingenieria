@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -24,6 +25,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Observer
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import com.aring.movil.data.Admin
 import com.aring.movil.data.ApiException
 import com.aring.movil.data.ApiService
@@ -241,10 +250,54 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
 
     val noLeidas = Repositorio.noLeidasTecnico(tecnico.id)
 
+    fun refrescarTecnico() {
+        scope.launch { runCatching { Repositorio.cargarTecnico(tecnico.id) } }
+    }
+
     LaunchedEffect(Unit) {
         refrescando = true
         runCatching { Repositorio.cargarTecnico(tecnico.id) }
         refrescando = false
+    }
+
+    // Fase 1a: al recuperar conexión se re-programa el envío del outbox y se refresca la vista,
+    // de modo que el aviso rojo de sincronización desaparece solo cuando el servidor confirmó.
+    DisposableEffect(tecnico.id) {
+        val appContext = context.applicationContext
+        val manager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                OfflineSync.reintentarPendientes(appContext)
+                refrescarTecnico()
+            }
+        }
+        val peticion = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        try {
+            manager?.registerNetworkCallback(peticion, callback)
+        } catch (_: Exception) {
+        }
+        onDispose {
+            try {
+                manager?.unregisterNetworkCallback(callback)
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    // Fase 1b: cuando la cadena "aring-offline-sync" termina, se refresca el estado en vivo:
+    // el chip "Pendiente de sincronizar" desaparece y la tarea pasa a Finalizada sin acciones del usuario.
+    DisposableEffect(tecnico.id) {
+        val observador = Observer<List<WorkInfo>> { estados ->
+            if (estados != null && estados.any { it.state.isFinished }) {
+                refrescarTecnico()
+            }
+        }
+        val live = WorkManager.getInstance(context.applicationContext)
+            .getWorkInfosForUniqueWorkLiveData("aring-offline-sync")
+        live.observeForever(observador)
+        onDispose { live.removeObserver(observador) }
     }
 
     fun tareaActual(tarea: Tarea): Tarea =

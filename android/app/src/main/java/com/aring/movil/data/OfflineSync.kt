@@ -2,15 +2,19 @@ package com.aring.movil.data
 
 import android.content.Context
 import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 /** Durable on-device outbox. Reports stay here until the server confirms receipt. */
 object OfflineSync {
@@ -32,6 +36,14 @@ object OfflineSync {
         programar(root.context())
     }
 
+    @Synchronized fun guardarInicio(tareaId: Int, tecnico: Tecnico, ayudantesIds: List<Int>) {
+        guardarCredenciales(tecnico)
+        atomicWrite(File(root, "start-$tareaId.json"), JSONObject()
+            .put("tareaId", tareaId).put("tecnicoId", tecnico.id)
+            .put("ayudantesIds", JSONArray(ayudantesIds)).toString())
+        programar(root.context())
+    }
+
     @Synchronized fun finalizar(tareaId: Int, tecnico: Tecnico) {
         guardarCredenciales(tecnico)
         atomicWrite(File(root, "finish-$tareaId.json"), JSONObject()
@@ -43,7 +55,8 @@ object OfflineSync {
         ?.sortedBy { it.name } ?: emptyList()
     fun finalizaciones(): List<File> = root.listFiles { f -> f.name.startsWith("finish-") }?.sortedBy { it.name } ?: emptyList()
     fun pendiente(tareaId: Int): Boolean = File(root, "finish-$tareaId.json").exists()
-    fun hayPendientes(): Boolean = root.listFiles()?.any { it.name.startsWith("report-") || it.name.startsWith("finish-") } == true
+    fun pendienteInicio(tareaId: Int): Boolean = File(root, "start-$tareaId.json").exists()
+    fun hayPendientes(): Boolean = root.listFiles()?.any { it.name.startsWith("report-") || it.name.startsWith("finish-") || it.name.startsWith("start-") } == true
     fun ultimoError(): String = statusPrefs.getString("last_error", "").orEmpty()
     internal fun credenciales(tecnicoId: Int): Tecnico? {
         val rut = authPrefs.getString("rut_$tecnicoId", null) ?: return null
@@ -53,7 +66,7 @@ object OfflineSync {
     internal fun limpiarError() { statusPrefs.edit().remove("last_error").apply() }
     internal fun limpiarCredencialesSinPendientes(tecnicoId: Int) {
         val pendientes = root.listFiles()?.any { file ->
-            (file.name.startsWith("report-") || file.name.startsWith("finish-")) && runCatching {
+            (file.name.startsWith("report-") || file.name.startsWith("finish-") || file.name.startsWith("start-")) && runCatching {
                 JSONObject(file.readText()).optInt("tecnicoId") == tecnicoId
             }.getOrDefault(false)
         } == true
@@ -77,7 +90,7 @@ object OfflineSync {
         val current = Prefs.leerTecnico()
         if (current != null && hayPendientes()) {
             val pendingIds = buildSet {
-                root.listFiles()?.filter { it.name.startsWith("report-") || it.name.startsWith("finish-") }
+                root.listFiles()?.filter { it.name.startsWith("report-") || it.name.startsWith("finish-") || it.name.startsWith("start-") }
                     ?.forEach { file -> runCatching { add(JSONObject(file.readText()).optInt("tecnicoId")) } }
             }
             if (current.id in pendingIds) guardarCredenciales(current)
@@ -126,7 +139,6 @@ class OfflineSyncWorker(context: Context, params: WorkerParameters) : Worker(con
         var tokenRestaurado = false
         val tokenOriginal = ApiService.token
         try {
-            val reports = directory.listFiles { f -> f.name.startsWith("report-") }?.sortedBy { it.name }.orEmpty()
             val tokens = mutableMapOf<Int, String>()
             fun tokenPara(tecnicoId: Int): String = tokens.getOrPut(tecnicoId) {
                 val tecnico = OfflineSync.credenciales(tecnicoId)
@@ -134,6 +146,30 @@ class OfflineSyncWorker(context: Context, params: WorkerParameters) : Worker(con
                 kotlinx.coroutines.runBlocking { ApiService.loginTecnico(tecnico.rut, tecnico.password) }
             }
 
+            // Orden garantizado: inicios (start-) → informes (report-) → finalizaciones (finish-).
+            val starts = directory.listFiles { f -> f.name.startsWith("start-") }?.sortedBy { it.name }.orEmpty()
+            for (file in starts) {
+                runCatching {
+                    val item = JSONObject(file.readText())
+                    val tareaId = item.getInt("tareaId")
+                    val tecnicoId = item.getInt("tecnicoId")
+                    technicianIds.add(tecnicoId)
+                    val token = tokenPara(tecnicoId)
+                    ApiService.token = token
+                    val ayudantes = item.optJSONArray("ayudantesIds") ?: JSONArray()
+                    val ids = (0 until ayudantes.length()).map { ayudantes.optInt(it) }
+                    kotlinx.coroutines.runBlocking { ApiService.iniciarTarea(tareaId, ids) }
+                    file.delete()
+                }.onFailure { e ->
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    falloAlgo = true
+                    OfflineSync.registrarError(
+                        (e as? ApiException)?.message ?: e.message ?: "Error inesperado al iniciar una tarea pendiente."
+                    )
+                }
+            }
+
+            val reports = directory.listFiles { f -> f.name.startsWith("report-") }?.sortedBy { it.name }.orEmpty()
             for (file in reports) {
                 // Un fallo en un informe no debe abortar el resto: cada archivo se procesa por separado.
                 runCatching {
@@ -194,5 +230,43 @@ class OfflineSyncWorker(context: Context, params: WorkerParameters) : Worker(con
         } finally {
             if (!tokenRestaurado) ApiService.token = tokenOriginal
         }
+    }
+}
+
+/**
+ * Refresco periódico en segundo plano (Fase 3): mientras haya sesión de técnico, cada 15 minutos
+ * con conexión relee tareas y notificaciones del servidor, para que la invitación y los cambios
+ * aparecen sin necesidad de tocar el botón de refresco.
+ */
+class RefrescoTecnicoWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
+    override fun doWork(): Result {
+        return try {
+            Prefs.init(applicationContext)
+            OfflineSync.initWithContext(applicationContext)
+            val tecnico = Prefs.leerTecnico() ?: return Result.success()
+            val cred = OfflineSync.credenciales(tecnico.id) ?: tecnico
+            val token = kotlinx.coroutines.runBlocking {
+                ApiService.loginTecnico(cred.rut.ifBlank { tecnico.rut }, cred.password)
+            }
+            ApiService.token = token
+            kotlinx.coroutines.runBlocking { Repositorio.cargarTecnico(tecnico.id) }
+            Result.success()
+        } catch (e: Exception) {
+            OfflineSync.registrarError((e as? ApiException)?.message ?: e.message ?: "Error inesperado al refrescar la sesión.")
+            Result.retry()
+        }
+    }
+}
+
+object RefrescoSesion {
+    fun programar(context: Context) {
+        val request = PeriodicWorkRequestBuilder<RefrescoTecnicoWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .build()
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            "aring-refresco-tecnico",
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
     }
 }

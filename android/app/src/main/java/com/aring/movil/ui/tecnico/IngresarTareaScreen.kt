@@ -32,11 +32,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aring.movil.data.ApiException
+import com.aring.movil.data.OfflineSync
+import com.aring.movil.data.OfflineTaskCache
 import com.aring.movil.data.Repositorio
 import com.aring.movil.data.Tarea
 import com.aring.movil.data.Tecnico
 import com.aring.movil.data.inicialesDe
 import com.aring.movil.ui.components.Avatar
+import com.aring.movil.ui.components.BannerError
 import com.aring.movil.ui.components.BannerOk
 import com.aring.movil.ui.components.BtnPrimario
 import com.aring.movil.ui.components.BtnSecundario
@@ -48,6 +52,7 @@ import com.aring.movil.ui.theme.TextoGris
 import com.aring.movil.ui.theme.TextoOscuro
 import com.aring.movil.ui.theme.VioletaOscuro
 import kotlinx.coroutines.launch
+import java.time.OffsetDateTime
 
 @Composable
 fun IngresarTareaScreen(
@@ -59,6 +64,23 @@ fun IngresarTareaScreen(
     val retomando = tarea.estado == "En proceso"
     val ayudantes = remember { mutableStateListOf("") }
     var cargando by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf("") }
+    // Inicio encolado sin conexión: se envía solo cuando vuelva internet.
+    var inicioPendiente by remember { mutableStateOf(false) }
+
+    fun encolarInicioLocal(ids: List<Int>) {
+        OfflineSync.guardarInicio(tarea.id, tecnico, ids)
+        val indice = Repositorio.tareas.indexOfFirst { it.id == tarea.id }
+        if (indice >= 0) {
+            Repositorio.tareas[indice] = tarea.copy(
+                estado = "En proceso",
+                sincronizacionPendiente = true,
+                fechaInicio = OffsetDateTime.now().toString(),
+                tecnicoAyudantesIds = ids
+            )
+        }
+        OfflineTaskCache.save(tecnico.id, Repositorio.tareas.toList())
+    }
 
     val opcionesPara = { indice: Int ->
         val tomados = ayudantes
@@ -205,20 +227,55 @@ fun IngresarTareaScreen(
 
             Spacer(Modifier.height(20.dp))
 
-            BtnPrimario(
-                texto = "Iniciar tarea",
-                modifier = Modifier.fillMaxWidth(),
-                cargando = cargando,
-                icono = Icons.Filled.PlayArrow
-            ) {
-                scope.launch {
-                    cargando = true
-                    Repositorio.iniciarTarea(
-                        id = tarea.id,
-                        ayudantesIds = ayudantes.mapNotNull { it.ifBlank { null }?.toInt() },
-                    )
-                    cargando = false
-                    onContinuar()
+            if (error.isNotBlank()) {
+                BannerError(error)
+                Spacer(Modifier.height(12.dp))
+            }
+
+            if (inicioPendiente) {
+                BannerOk(
+                    "La sincronización está pendiente · la tarea y las invitaciones se enviarán al recuperar conexión."
+                )
+                Spacer(Modifier.height(12.dp))
+                BtnPrimario(
+                    texto = "Continuar con tableros (sin conexión)",
+                    modifier = Modifier.fillMaxWidth(),
+                    icono = Icons.Filled.PlayArrow,
+                    onClick = onContinuar
+                )
+            } else {
+                BtnPrimario(
+                    texto = "Iniciar tarea",
+                    modifier = Modifier.fillMaxWidth(),
+                    cargando = cargando,
+                    icono = Icons.Filled.PlayArrow
+                ) {
+                    scope.launch {
+                        cargando = true
+                        error = ""
+                        val ids = ayudantes.mapNotNull { it.ifBlank { null }?.toInt() }
+                        try {
+                            Repositorio.iniciarTarea(
+                                id = tarea.id,
+                                ayudantesIds = ids,
+                            )
+                            cargando = false
+                            onContinuar()
+                        } catch (e: ApiException) {
+                            cargando = false
+                            if (e.codigo == null) {
+                                // Fallo de red: la tarea queda iniciada en el dispositivo y el
+                                // outbox la envía (con sus invitaciones) al recuperar conexión.
+                                encolarInicioLocal(ids)
+                                inicioPendiente = true
+                            } else {
+                                error = e.message ?: "No se pudo iniciar la tarea."
+                            }
+                        } catch (e: Exception) {
+                            cargando = false
+                            error = e.message ?: "No se pudo iniciar la tarea."
+                        }
+                    }
                 }
             }
         }

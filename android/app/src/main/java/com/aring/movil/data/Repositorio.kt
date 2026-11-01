@@ -78,6 +78,8 @@ object Repositorio {
         return when {
             OfflineSync.pendiente(t.id) || t.sincronizacionPendiente ->
                 t.copy(estado = "Finalizada", sincronizacionPendiente = true, tablerosRealizados = t.tablerosRealizados + pendientes)
+            runCatching { OfflineSync.pendienteInicio(t.id) }.getOrDefault(false) ->
+                t.copy(estado = "En proceso", sincronizacionPendiente = true, tablerosRealizados = t.tablerosRealizados + pendientes)
             pendientes > 0 -> t.copy(tablerosRealizados = t.tablerosRealizados + pendientes)
             else -> t
         }

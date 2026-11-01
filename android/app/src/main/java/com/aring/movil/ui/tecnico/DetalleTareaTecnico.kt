@@ -115,7 +115,7 @@ fun DetalleTareaTecnico(
 
         if (tarea.sincronizacionPendiente) {
             Text(
-                "Esta tarea ya está terminada en el dispositivo y espera enviar sus datos cuando vuelva Internet.",
+                "La sincronización está pendiente · esta tarea termina de sincronizarse cuando vuelva Internet.",
                 color = TextoGris,
                 fontSize = 13.sp
             )

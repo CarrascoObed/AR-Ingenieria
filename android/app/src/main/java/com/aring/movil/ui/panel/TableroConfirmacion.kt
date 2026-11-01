@@ -70,7 +70,7 @@ fun TableroConfirmacion(
         Spacer(Modifier.height(10.dp))
         Text(
             if (tarea.sincronizacionPendiente)
-                "La tarea y sus informes están guardados en este dispositivo. Se enviarán automáticamente cuando vuelva la conexión. Conserva la sesión para completar la sincronización."
+                "La sincronización está pendiente: la tarea y sus informes están guardados en este dispositivo y se enviarán automáticamente cuando vuelva la conexión."
             else "Todos los tableros realizados fueron registrados y la tarea quedó finalizada.",
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,

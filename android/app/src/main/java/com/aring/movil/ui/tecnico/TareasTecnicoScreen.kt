@@ -78,7 +78,7 @@ fun TareasTecnicoScreen(
                 ""
             }
             Text(
-                "Pendiente de sincronizar · se enviará al recuperar conexión" +
+                "La sincronización está pendiente · se enviará al recuperar conexión" +
                     if (detalle.isNotBlank()) "\n$detalle" else "",
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,
@@ -159,7 +159,7 @@ private fun TarjetaTareaTecnico(
         }
         Spacer(Modifier.height(10.dp))
         if (tarea.sincronizacionPendiente) {
-            Text("Pendiente de sincronizar · se enviará al recuperar conexión", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            Text("La sincronización está pendiente · se enviará al recuperar conexión", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
             Spacer(Modifier.height(6.dp))
         }
         Text(
