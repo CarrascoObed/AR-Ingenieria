@@ -78,3 +78,34 @@ Creado por **Eliezer Carrasco** para **AR-Ingeniería** · © 2026 · Versión 1
 | Usuario servidor       | `ar-ingenieria`                                              |
 | Contraseña servidor    | `1q2w3e4r5t6y`                                               |
 | URL aplicación web     | https://login.tailscale.com/f/funnel?node=ntaSJsneiQ11CNTRL  |
+
+### Comandos del servidor
+
+**Modo gráfico**
+
+Iniciar el modo gráfico de inmediato (sin reiniciar):
+```bash
+sudo systemctl start graphical.target
+```
+
+Configurar para que arranque SIEMPRE en modo gráfico por defecto:
+```bash
+sudo systemctl set-default graphical.target
+```
+
+**Modo Consola (CLI)**
+
+Cambiar al modo consola de inmediato (sin reiniciar):
+```bash
+sudo systemctl isolate multi-user.target
+```
+
+Configurar para que arranque SIEMPRE en modo consola por defecto:
+```bash
+sudo systemctl set-default multi-user.target
+```
+
+**Comando para descargar todos los cambios de GitHub:**
+```bash
+cd ~/Desktop/AR-Ingenieria && git pull origin main && sudo docker compose up -d --build backend frontend
+```
