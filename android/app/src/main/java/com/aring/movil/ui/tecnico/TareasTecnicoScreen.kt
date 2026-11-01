@@ -158,10 +158,6 @@ private fun TarjetaTareaTecnico(
             }
         }
         Spacer(Modifier.height(10.dp))
-        if (tarea.sincronizacionPendiente) {
-            Text("La sincronización está pendiente · se enviará al recuperar conexión", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
-            Spacer(Modifier.height(6.dp))
-        }
         Text(
             tarea.nombreRecinto,
             modifier = Modifier.fillMaxWidth(),

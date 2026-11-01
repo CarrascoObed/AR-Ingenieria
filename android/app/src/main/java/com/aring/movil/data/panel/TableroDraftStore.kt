@@ -12,7 +12,16 @@ object TableroDraftStore {
         prefs = context.getSharedPreferences("aring_tableros", Context.MODE_PRIVATE)
     }
 
-    private fun key(tareaId: Int, tipo: String) = "draft_${tareaId}_$tipo"
+    /**
+     * Clave del borrador por técnico: draft_{tecnicoId}_{tareaId}_{tipo}.
+     * Así el ayudante nunca retoma el borrador que dejó el técnico de cabecera
+     * cuando ambas cuentas se usan en el mismo dispositivo; cada técnico abre
+     * siempre su propio tablero dentro de la tarea.
+     */
+    private fun key(tareaId: Int, tipo: String): String {
+        val tecnicoId = runCatching { com.aring.movil.data.Prefs.leerTecnico()?.id }.getOrNull() ?: 0
+        return "draft_${tecnicoId}_${tareaId}_$tipo"
+    }
 
     fun limpiar(tareaId: Int, tipo: String) {
         prefs.edit().remove(key(tareaId, tipo)).apply()
