@@ -254,6 +254,8 @@ Docker backend: imagen base `maven:3.9-eclipse-temurin-21` build + `eclipse-temu
 
 **Selector de clientes al crear tarea (web):** `Tareas.jsx` normaliza la búsqueda (`normalizar()` quita tildes/ñ) para sugerencias tolerantes a acentos, muestra todos los clientes registrados al enfocar el campo con texto vacío y avisa cuando no hay coincidencia ("La tarea se creará sin cliente asociado"); sin cliente seleccionado el `clienteId` va null.
 
+**Selector de clientes al crear tarea (móvil admin, paridad con web):** la app Android del administrador ahora descarga `/api/clientes` (`Repositorio.clientes`, cargado en `cargarAdmin`) y en el modal "Crear tarea" despliega sugerencias al escribir la dirección, insensibles a tildes/ñ (`Repositorio.sugerenciasClientes`); seleccionar un cliente rellena recinto y envía `clienteId` a `POST /tareas`, de modo que la tarea queda vinculada al cliente igual que en el panel web.
+
 ---
 
 ## 9. Frontend (panel web React)

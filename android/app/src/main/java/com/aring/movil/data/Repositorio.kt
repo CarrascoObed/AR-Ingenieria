@@ -14,6 +14,7 @@ object Repositorio {
     val tecnicos = mutableStateListOf<Tecnico>()
     val tareas = mutableStateListOf<Tarea>()
     val notificaciones = mutableStateListOf<Notificacion>()
+    val clientes = mutableStateListOf<Cliente>()
 
     suspend fun login(username: String, password: String): Sesion {
         val json = ApiService.login(username.trim(), password)
@@ -58,6 +59,12 @@ object Repositorio {
         tecnicos.addAll(tecs)
         notificaciones.clear()
         notificaciones.addAll(notifs)
+        runCatching {
+            clientes.clear()
+            clientes.addAll(ApiService.clientes().let { arr ->
+                (0 until arr.length()).map { clienteDesdeJson(arr.getJSONObject(it)) }
+            })
+        }
     }
 
     /**
@@ -149,12 +156,31 @@ object Repositorio {
         tecnicos.removeAll { it.id == id }
     }
 
+    private fun clienteDesdeJson(o: JSONObject): Cliente = Cliente(
+        id = o.getInt("id"),
+        direccion = o.optString("direccion"),
+        nombreRecinto = o.optString("nombreRecinto"),
+    )
+
+    /** Versión sin tildes ni "ñ" de un texto; emula la búsqueda del panel web. */
+    private fun normalizarBusqueda(texto: String): String =
+        texto.lowercase().let { java.text.Normalizer.normalize(it, java.text.Normalizer.Form.NFD) }
+            .replace(Regex("\\p{Mn}+"), "")
+            .replace("ñ", "n")
+
+    fun sugerenciasClientes(texto: String): List<Cliente> {
+        val consulta = normalizarBusqueda(texto.trim())
+        return if (consulta.isEmpty()) clientes.toList()
+        else clientes.filter { normalizarBusqueda(it.direccion).contains(consulta) }
+    }
+
     suspend fun crearTarea(
         tipo: String,
         direccion: String,
         nombreRecinto: String,
         descripcion: String,
         tecnicoCabeceraId: Int,
+        clienteId: Int? = null,
     ) {
         val cuerpo = JSONObject()
             .put("tipo", tipo)
@@ -162,6 +188,7 @@ object Repositorio {
             .put("nombreRecinto", nombreRecinto.trim())
             .put("descripcion", descripcion.trim())
             .put("tecnicoCabeceraId", tecnicoCabeceraId)
+        clienteId?.let { cuerpo.put("clienteId", it) }
         val tarea = tareaDesdeJson(ApiService.crearTarea(cuerpo))
         tareas.add(0, tarea)
     }

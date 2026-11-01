@@ -1,6 +1,7 @@
 package com.aring.movil.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,10 +12,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -35,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aring.movil.data.ApiException
+import com.aring.movil.data.Cliente
 import com.aring.movil.data.Prefs
 import com.aring.movil.data.Repositorio
 import com.aring.movil.data.Tarea
@@ -92,6 +97,8 @@ fun TareasScreen(clave: Int) {
     var fRecinto by remember { mutableStateOf("") }
     var fDescripcion by remember { mutableStateOf("") }
     var fTecnicoId by remember { mutableStateOf("") }
+    var fCliente by remember { mutableStateOf<Cliente?>(null) }
+    var sugerenciasAbiertas by remember { mutableStateOf(false) }
 
     var eTecnicoId by remember { mutableStateOf("") }
 
@@ -152,6 +159,8 @@ fun TareasScreen(clave: Int) {
                 fRecinto = ""
                 fDescripcion = ""
                 fTecnicoId = ""
+                fCliente = null
+                sugerenciasAbiertas = true
                 crearAbierto = true
             }
             if (tareasVisibles.any { it.estado == "Finalizada" }) {
@@ -299,11 +308,56 @@ fun TareasScreen(clave: Int) {
             SeccionFormulario("Datos de la tarea") {
                 CampoSelect("Tipo de tarea", TIPOS, "MANTENIMIENTO") { }
                 Spacer(Modifier.height(10.dp))
+                val sugerenciasDireccion = Repositorio.sugerenciasClientes(fDireccion)
                 CampoTexto(
                     "Dirección",
                     fDireccion,
-                    { fDireccion = it },
+                    { nuevo ->
+                        fDireccion = nuevo
+                        if (fCliente != null && nuevo != fCliente!!.direccion) fCliente = null
+                        sugerenciasAbiertas = true
+                    },
                     "Ej: Av. Vicuña Mackena 3001. Ñuñoa."
+                )
+                if (sugerenciasAbiertas && fCliente?.direccion != fDireccion && sugerenciasDireccion.isNotEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 200.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        sugerenciasDireccion.forEach { c ->
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        fCliente = c
+                                        fDireccion = c.direccion
+                                        fRecinto = c.nombreRecinto
+                                        sugerenciasAbiertas = false
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                            ) {
+                                Text(c.direccion, color = TextoOscuro, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Spacer(Modifier.height(2.dp))
+                                Text(c.nombreRecinto, color = TextoGris, fontSize = 12.sp)
+                            }
+                            HorizontalSeparador()
+                        }
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    when {
+                        fCliente != null -> "Cliente seleccionado: ${fCliente!!.direccion} · ${fCliente!!.nombreRecinto}. Puedes editar el nombre del recinto."
+                        fDireccion.isNotBlank() && Repositorio.clientes.isNotEmpty() ->
+                            "Ningún cliente coincide con la dirección; la tarea se creará sin cliente asociado."
+                        else -> "Toca la dirección para ver los clientes registrados; al elegir uno se completa el recinto."
+                    },
+                    color = if (fCliente != null) Violeta else TextoGris,
+                    fontSize = 12.sp
                 )
                 Spacer(Modifier.height(10.dp))
                 CampoTexto("Nombre del recinto", fRecinto, { fRecinto = it }, "Ej: Edificio Central")
@@ -337,6 +391,7 @@ fun TareasScreen(clave: Int) {
                                 nombreRecinto = fRecinto,
                                 descripcion = fDescripcion,
                                 tecnicoCabeceraId = fTecnicoId.toInt(),
+                                clienteId = fCliente?.id,
                             )
                             crearAbierto = false
                             mostrarAviso("Tarea creada correctamente.")

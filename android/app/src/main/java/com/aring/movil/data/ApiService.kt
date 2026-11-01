@@ -97,6 +97,9 @@ object ApiService {
     suspend fun tecnicos(): JSONArray =
         parsearArreglo(ejecutar("GET", "/api/tecnicos"))
 
+    suspend fun clientes(): JSONArray =
+        parsearArreglo(ejecutar("GET", "/api/clientes"))
+
     suspend fun crearTecnico(cuerpo: JSONObject): JSONObject =
         parsearObjeto(ejecutar("POST", "/api/tecnicos", cuerpo.toString()))
 

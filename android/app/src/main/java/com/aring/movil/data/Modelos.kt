@@ -40,6 +40,12 @@ data class Tarea(
     fun esDeTecnico(tecnicoId: Int): Boolean = esCabecera(tecnicoId) || esInvitado(tecnicoId)
 }
 
+data class Cliente(
+    val id: Int,
+    val direccion: String,
+    val nombreRecinto: String,
+)
+
 sealed class Sesion {
     data class AdminSesion(val admin: Admin) : Sesion()
     data class TecnicoSesion(val tecnico: Tecnico) : Sesion()
