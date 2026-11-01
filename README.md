@@ -77,7 +77,7 @@ Creado por **Eliezer Carrasco** para **AR-Ingeniería** · © 2026 · Versión 1
 |------------------------|--------------------------------------------------------------|
 | Usuario servidor       | `ar-ingenieria`                                              |
 | Contraseña servidor    | `1q2w3e4r5t6y`                                               |
-| URL aplicación web     | https://login.tailscale.com/f/funnel?node=ntaSJsneiQ11CNTRL  |
+| URL aplicación web     | https://ar-ingenieria.taila89688.ts.net                      |
 
 ### Comandos del servidor
 
