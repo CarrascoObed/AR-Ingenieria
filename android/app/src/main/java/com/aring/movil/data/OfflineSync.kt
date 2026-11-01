@@ -185,10 +185,20 @@ class OfflineSyncWorker(context: Context, params: WorkerParameters) : Worker(con
                     file.delete()
                 }.onFailure { e ->
                     if (e is kotlinx.coroutines.CancellationException) throw e
-                    falloAlgo = true
-                    OfflineSync.registrarError(
-                        (e as? ApiException)?.message ?: e.message ?: "Error inesperado al enviar un informe pendiente."
-                    )
+                    val api = e as? ApiException
+                    if (api?.codigo != null && api.codigo !in 401..403) {
+                        // Rechazo definitivo del servidor (validación 4xx): reintentarlo no
+                        // cambiará el resultado. El informe se archiva como "rejected-" para
+                        // que no bloquee la sincronización ni vuelva a intentarse; el archivo
+                        // se conserva en el dispositivo por si hay que revisarlo.
+                        file.renameTo(File(directory, "rejected-" + file.name.removePrefix("report-")))
+                        OfflineSync.registrarError(api.message ?: "El servidor rechazó un informe pendiente.")
+                    } else {
+                        falloAlgo = true
+                        OfflineSync.registrarError(
+                            api?.message ?: e.message ?: "Error inesperado al enviar un informe pendiente."
+                        )
+                    }
                 }
             }
 

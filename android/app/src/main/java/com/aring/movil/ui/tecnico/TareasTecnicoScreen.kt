@@ -12,14 +12,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.aring.movil.data.OfflineSync
 import com.aring.movil.data.Repositorio
 import com.aring.movil.data.Tarea
 import com.aring.movil.data.Tecnico
@@ -62,32 +60,6 @@ fun TareasTecnicoScreen(
             fontSize = 14.sp
         )
         Spacer(Modifier.height(12.dp))
-
-        val hayPendientes = runCatching { OfflineSync.hayPendientes() }.getOrDefault(false)
-        val ultimoError = runCatching { OfflineSync.ultimoError() }.getOrDefault("")
-        if (hayPendientes) {
-            val detalle = if (ultimoError.isNotBlank()) {
-                val pistaCredenciales =
-                    ultimoError.indexOf("contrase", 0, ignoreCase = true) >= 0 ||
-                        ultimoError.indexOf("Usuario o", 0, ignoreCase = true) >= 0
-                if (pistaCredenciales)
-                    "$ultimoError · Cierre sesión y vuelva a entrar para actualizar sus credenciales."
-                else
-                    "Último error: $ultimoError"
-            } else {
-                ""
-            }
-            Text(
-                "La sincronización está pendiente · se enviará al recuperar conexión" +
-                    if (detalle.isNotBlank()) "\n$detalle" else "",
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.error,
-                fontSize = 12.sp
-            )
-            Spacer(Modifier.height(12.dp))
-        }
-        Spacer(Modifier.height(8.dp))
 
         if (tareas.isEmpty() && !hayHistorial) {
             Vacio("No tienes tareas asignadas.")
