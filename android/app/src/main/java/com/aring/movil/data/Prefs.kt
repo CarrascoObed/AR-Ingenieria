@@ -10,27 +10,7 @@ object Prefs {
         prefs = context.getSharedPreferences("aring_movil", Context.MODE_PRIVATE)
     }
 
-    fun guardarAdmin(a: Admin) {
-        prefs.edit()
-            .putString("admin_token", a.token)
-            .putString("admin_nombre", a.nombre)
-            .putString("admin_apellido", a.apellido)
-            .putString("admin_iniciales", a.iniciales)
-            .putString("admin_username", a.username)
-            .apply()
-    }
-
-    fun leerAdmin(): Admin? {
-        val nombre = prefs.getString("admin_nombre", null) ?: return null
-        return Admin(
-            token = prefs.getString("admin_token", "").orEmpty(),
-            nombre = nombre,
-            apellido = prefs.getString("admin_apellido", "").orEmpty(),
-            iniciales = prefs.getString("admin_iniciales", "").orEmpty(),
-            username = prefs.getString("admin_username", "").orEmpty(),
-        )
-    }
-
+    /** Elimina credenciales de administrador que hayan quedado de versiones anteriores. */
     fun borrarAdmin() {
         prefs.edit()
             .remove("admin_token")

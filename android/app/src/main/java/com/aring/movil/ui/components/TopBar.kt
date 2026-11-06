@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -22,8 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,7 +35,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.aring.movil.ui.theme.RojoError
 import com.aring.movil.ui.theme.Violeta
 import com.aring.movil.ui.theme.VioletaOscuro
 
@@ -47,11 +43,7 @@ fun TopBar(
     iniciales: String,
     nombre: String,
     apellido: String,
-    refrescando: Boolean,
-    noLeidas: Int,
     onBack: (() -> Unit)? = null,
-    onRefresh: () -> Unit,
-    onAbrirNotificaciones: () -> Unit,
     onCerrarSesion: () -> Unit,
 ) {
     val brush = Brush.linearGradient(listOf(Violeta, VioletaOscuro))
@@ -95,45 +87,6 @@ fun TopBar(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-            }
-
-            IconoCircular(onClick = onRefresh) {
-                Icon(
-                    Icons.Filled.Refresh,
-                    contentDescription = "Actualizar",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            Box {
-                IconoCircular(onClick = onAbrirNotificaciones) {
-                    Icon(
-                        Icons.Filled.Notifications,
-                        contentDescription = "Notificaciones",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                if (noLeidas > 0) {
-                    Box(
-                        Modifier
-                            .align(Alignment.TopEnd)
-                            .offset(x = 2.dp, y = (-2).dp)
-                            .size(18.dp)
-                            .clip(CircleShape)
-                            .background(RojoError)
-                            .border(1.5.dp, Color.White, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            if (noLeidas > 9) "9+" else noLeidas.toString(),
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
             }
 
             IconoCircular(onClick = onCerrarSesion) {

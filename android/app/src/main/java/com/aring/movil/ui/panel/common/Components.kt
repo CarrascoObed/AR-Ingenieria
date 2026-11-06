@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PhotoCamera
@@ -453,7 +454,8 @@ private fun PhotoSection(
     onTakePhoto: () -> Unit,
     onViewPhoto: () -> Unit,
     onRetakePhoto: () -> Unit,
-    onPhotoEdited: (String) -> Unit
+    onPhotoEdited: (String) -> Unit,
+    onPhotoDeleted: () -> Unit
 ) {
     var anotando by remember { mutableStateOf(false) }
     if (photoPath == null) {
@@ -487,24 +489,18 @@ private fun PhotoSection(
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
                 )
-                Row {
-                    TextButton(onClick = onViewPhoto, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                        Icon(Icons.Rounded.Visibility, contentDescription = null, modifier = Modifier.size(16.dp), tint = Violeta)
-                        Spacer(Modifier.width(4.dp))
-                        Text("Ver foto", color = Violeta, fontSize = 13.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onViewPhoto, modifier = Modifier.size(44.dp)) {
+                        Icon(Icons.Rounded.Visibility, contentDescription = "Ver foto", modifier = Modifier.size(22.dp), tint = Violeta)
                     }
-                    TextButton(onClick = onRetakePhoto, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                        Icon(Icons.Rounded.Replay, contentDescription = null, modifier = Modifier.size(16.dp), tint = Violeta)
-                        Spacer(Modifier.width(4.dp))
-                        Text("Retomar foto", color = Violeta, fontSize = 13.sp)
+                    IconButton(onClick = onRetakePhoto, modifier = Modifier.size(44.dp)) {
+                        Icon(Icons.Rounded.Replay, contentDescription = "Tomar foto nuevamente", modifier = Modifier.size(22.dp), tint = Violeta)
                     }
-                    TextButton(onClick = { anotando = true }, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                        Icon(
-                            Icons.Rounded.Edit,
-                            contentDescription = "Dibujar sobre la foto",
-                            tint = Violeta,
-                            modifier = Modifier.size(18.dp)
-                        )
+                    IconButton(onClick = { anotando = true }, modifier = Modifier.size(44.dp)) {
+                        Icon(Icons.Rounded.Edit, contentDescription = "Dibujar sobre la foto", tint = Violeta, modifier = Modifier.size(22.dp))
+                    }
+                    IconButton(onClick = onPhotoDeleted, modifier = Modifier.size(44.dp)) {
+                        Icon(Icons.Rounded.Delete, contentDescription = "Eliminar foto", tint = RojoError, modifier = Modifier.size(22.dp))
                     }
                 }
             }
@@ -561,6 +557,7 @@ fun MeasurementCard(
     onViewPhoto: () -> Unit,
     onRetakePhoto: () -> Unit,
     onPhotoEdited: (String) -> Unit,
+    onPhotoDeleted: () -> Unit = {},
     showValueInput: Boolean = true,
     showError: Boolean = false,
     modifier: Modifier = Modifier
@@ -616,7 +613,7 @@ fun MeasurementCard(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            PhotoSection(photoPath, onTakePhoto, onViewPhoto, onRetakePhoto, onPhotoEdited)
+            PhotoSection(photoPath, onTakePhoto, onViewPhoto, onRetakePhoto, onPhotoEdited, onPhotoDeleted)
         }
     }
 }
@@ -626,11 +623,14 @@ fun ChecklistCard(
     label: String,
     status: ChecklistStatus?,
     onStatusSelected: (ChecklistStatus) -> Unit,
+    observation: String,
+    onObservationChange: (String) -> Unit,
     photoPath: String?,
     onTakePhoto: () -> Unit,
     onViewPhoto: () -> Unit,
     onRetakePhoto: () -> Unit,
     onPhotoEdited: (String) -> Unit,
+    onPhotoDeleted: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -670,23 +670,64 @@ fun ChecklistCard(
                     )
                 }
             }
-            if (status == ChecklistStatus.CR && photoPath == null) {
-                Spacer(Modifier.height(10.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.CameraAlt, contentDescription = null, tint = Amarillo, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "Evidencia fotográfica requerida",
-                        color = Amarillo,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+            if (status == ChecklistStatus.CR) {
+                if (photoPath == null) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.CameraAlt, contentDescription = null, tint = Amarillo, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "Evidencia fotográfica requerida",
+                            color = Amarillo,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
                 Spacer(Modifier.height(10.dp))
-                PhotoSection(photoPath, onTakePhoto, onViewPhoto, onRetakePhoto, onPhotoEdited)
-            } else if (status == ChecklistStatus.CR) {
-                Spacer(Modifier.height(10.dp))
-                PhotoSection(photoPath, onTakePhoto, onViewPhoto, onRetakePhoto, onPhotoEdited)
+                PhotoSection(photoPath, onTakePhoto, onViewPhoto, onRetakePhoto, onPhotoEdited, onPhotoDeleted)
+                Spacer(Modifier.height(12.dp))
+                Text("Observación de este punto", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = TextoOscuro)
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = observation,
+                    onValueChange = onObservationChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Describa el detalle encontrado...") },
+                    minLines = 2,
+                    maxLines = 4,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Violeta,
+                        unfocusedBorderColor = BordeSuave,
+                        focusedLabelColor = Violeta
+                    )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ChecklistObservationsSection(items: List<Pair<String, String>>) {
+    if (items.isEmpty()) return
+    Column {
+        Text("Observaciones del checklist", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextoOscuro)
+        Spacer(Modifier.height(6.dp))
+        Text("Se agregarán al final de las observaciones del informe.", fontSize = 12.sp, color = TextoGris)
+        items.forEach { (label, observation) ->
+            Spacer(Modifier.height(10.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = VioletaClaro),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(label, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = VioletaOscuro)
+                    Spacer(Modifier.height(4.dp))
+                    Text(observation, fontSize = 14.sp, color = TextoOscuro)
+                }
             }
         }
     }
@@ -701,6 +742,7 @@ fun PhotoSlotCard(
     onViewPhoto: () -> Unit,
     onRetakePhoto: () -> Unit,
     onPhotoEdited: (String) -> Unit,
+    onPhotoDeleted: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -729,7 +771,7 @@ fun PhotoSlotCard(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            PhotoSection(path, onTakePhoto, onViewPhoto, onRetakePhoto, onPhotoEdited)
+            PhotoSection(path, onTakePhoto, onViewPhoto, onRetakePhoto, onPhotoEdited, onPhotoDeleted)
         }
     }
 }

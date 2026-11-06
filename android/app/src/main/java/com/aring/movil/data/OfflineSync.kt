@@ -27,12 +27,14 @@ object OfflineSync {
         statusPrefs = context.getSharedPreferences("aring_outbox_status", Context.MODE_PRIVATE)
     }
 
-    @Synchronized fun guardarInforme(tareaId: Int, tecnico: Tecnico, payload: JSONObject) {
+    @Synchronized fun guardarInforme(tareaId: Int, tecnico: Tecnico, payload: JSONObject, deferUntilFinalization: Boolean = false) {
         guardarCredenciales(tecnico)
         val id = payload.optString("clientOperationId").ifBlank { UUID.randomUUID().toString() }
         payload.put("clientOperationId", id)
+        File(root, "rejected-$id.json").delete()
         atomicWrite(File(root, "report-$id.json"), JSONObject()
-            .put("tareaId", tareaId).put("tecnicoId", tecnico.id).put("payload", payload).toString())
+            .put("tareaId", tareaId).put("tecnicoId", tecnico.id)
+            .put("deferUntilFinalization", deferUntilFinalization).put("payload", payload).toString())
         programar(root.context())
     }
 
@@ -132,6 +134,7 @@ class OfflineSyncWorker(context: Context, params: WorkerParameters) : Worker(con
     override fun doWork(): Result {
         Prefs.init(applicationContext)
         OfflineSync.initWithContext(applicationContext)
+        com.aring.movil.data.panel.TableroDraftStore.init(applicationContext)
         val directory = File(applicationContext.filesDir, "offline-outbox")
         val technicianIds = mutableSetOf<Int>()
         var falloAlgo = false
@@ -175,6 +178,8 @@ class OfflineSyncWorker(context: Context, params: WorkerParameters) : Worker(con
                 runCatching {
                     val item = JSONObject(file.readText())
                     val taskId = item.getInt("tareaId")
+                    if (item.optBoolean("deferUntilFinalization") && !File(directory, "finish-$taskId.json").exists()) return@runCatching
+                    if (File(directory, "start-$taskId.json").exists()) return@runCatching
                     val tecnicoId = item.getInt("tecnicoId")
                     technicianIds.add(tecnicoId)
                     val token = tokenPara(tecnicoId)
@@ -202,17 +207,35 @@ class OfflineSyncWorker(context: Context, params: WorkerParameters) : Worker(con
                 }
             }
 
+            val rejectedTaskIds = directory.listFiles { f -> f.name.startsWith("rejected-") }?.mapNotNull { f ->
+                runCatching { JSONObject(f.readText()).optInt("tareaId").takeIf { it != 0 } }.getOrNull()
+            }?.toSet().orEmpty()
+            val pendingReportTaskIds = directory.listFiles { f -> f.name.startsWith("report-") }?.mapNotNull { f ->
+                runCatching { JSONObject(f.readText()).optInt("tareaId").takeIf { it != 0 } }.getOrNull()
+            }?.toSet().orEmpty()
+            val pendingStartTaskIds = directory.listFiles { f -> f.name.startsWith("start-") }?.mapNotNull { f ->
+                runCatching { JSONObject(f.readText()).optInt("tareaId").takeIf { it != 0 } }.getOrNull()
+            }?.toSet().orEmpty()
             val finishes = directory.listFiles { f -> f.name.startsWith("finish-") }?.sortedBy { it.name }.orEmpty()
             for (file in finishes) {
                 runCatching {
                     val item = JSONObject(file.readText())
                     val tareaId = item.getInt("tareaId")
+                    if (tareaId in rejectedTaskIds || tareaId in pendingReportTaskIds || tareaId in pendingStartTaskIds) {
+                        falloAlgo = true
+                        OfflineSync.registrarError(if (tareaId in rejectedTaskIds)
+                            "El servidor rechazó un informe de esta tarea. La tarea se mantiene abierta para corregirlo."
+                        else if (tareaId in pendingStartTaskIds) "El inicio de la tarea sigue pendiente de sincronización."
+                        else "Hay informes pendientes de sincronización. La tarea se cerrará cuando el servidor los reciba.")
+                        return@runCatching
+                    }
                     val tecnicoId = item.getInt("tecnicoId")
                     technicianIds.add(tecnicoId)
                     val token = tokenPara(tecnicoId)
                     ApiService.token = token
                     kotlinx.coroutines.runBlocking { ApiService.cambiarEstadoTarea(tareaId, "FINALIZADA") }
                     file.delete()
+                    com.aring.movil.data.panel.TableroDraftStore.limpiarTarea(tareaId, tecnicoId)
                 }.onFailure { e ->
                     if (e is kotlinx.coroutines.CancellationException) throw e
                     falloAlgo = true
@@ -244,9 +267,8 @@ class OfflineSyncWorker(context: Context, params: WorkerParameters) : Worker(con
 }
 
 /**
- * Refresco periódico en segundo plano (Fase 3): mientras haya sesión de técnico, cada 15 minutos
- * con conexión relee tareas y notificaciones del servidor, para que la invitación y los cambios
- * aparecen sin necesidad de tocar el botón de refresco.
+ * Refresco periódico en segundo plano: mientras haya sesión de técnico, cada 15 minutos
+ * con conexión relee las tareas y técnicos asignados para mantener la lista actualizada.
  */
 class RefrescoTecnicoWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
     override fun doWork(): Result {

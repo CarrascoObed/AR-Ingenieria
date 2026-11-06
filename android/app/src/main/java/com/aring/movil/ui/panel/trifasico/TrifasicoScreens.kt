@@ -11,6 +11,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import com.aring.movil.camera.OpenCamera
 import com.aring.movil.camera.PhotoBus
 import com.aring.movil.ui.panel.common.ChecklistCard
+import com.aring.movil.ui.panel.common.ChecklistObservationsSection
 import com.aring.movil.ui.panel.common.CollectPhotoResult
 import com.aring.movil.ui.panel.common.ErrorBanner
 import com.aring.movil.ui.panel.common.FormTextField
@@ -104,7 +105,8 @@ fun TrifasicoEvidenciasPreviasScreen(
                     },
                     onPhotoEdited = { nuevaRuta ->
                         vm.setPreviousPhoto(slot.index, nuevaRuta)
-                    }
+                    },
+                    onPhotoDeleted = { vm.setPreviousPhoto(slot.index, null) }
                 )
                 Spacing12()
             }
@@ -166,6 +168,7 @@ fun TrifasicoVariablesScreen(
                     onPhotoEdited = { nuevaRuta ->
                         vm.setMeasurementPhoto(measurement.variableId, nuevaRuta)
                     },
+                    onPhotoDeleted = { vm.setMeasurementPhoto(measurement.variableId, null) },
                     showValueInput = false
                 )
                 Spacing12()
@@ -182,7 +185,8 @@ fun TrifasicoVariablesScreen(
                 onRetakePhoto = {
                     openCamera(3, PhotoBus.CATEGORY_REAPRIETE, null, -1, "Reapriete")
                 },
-                onPhotoEdited = { vm.setReaprietePhoto(it) }
+                onPhotoEdited = { vm.setReaprietePhoto(it) },
+                onPhotoDeleted = { vm.setReaprietePhoto(null) }
             )
             Spacing12()
             PhotoSlotCard(
@@ -196,7 +200,8 @@ fun TrifasicoVariablesScreen(
                 onRetakePhoto = {
                     openCamera(3, PhotoBus.CATEGORY_ASEO, null, -1, "Aseo")
                 },
-                onPhotoEdited = { vm.setAseoPhoto(it) }
+                onPhotoEdited = { vm.setAseoPhoto(it) },
+                onPhotoDeleted = { vm.setAseoPhoto(null) }
             )
             Spacing16()
             ErrorBanner(error)
@@ -242,6 +247,8 @@ fun TrifasicoChecklistScreen(
                     label = item.label,
                     status = item.status,
                     onStatusSelected = { vm.setChecklistStatus(item.itemId, it) },
+                    observation = item.observation,
+                    onObservationChange = { vm.setChecklistObservation(item.itemId, it) },
                     photoPath = item.photoPath,
                     onTakePhoto = {
                         openCamera(4, PhotoBus.CATEGORY_CHECKLIST, item.itemId, -1, item.label)
@@ -252,7 +259,8 @@ fun TrifasicoChecklistScreen(
                     },
                     onPhotoEdited = { nuevaRuta ->
                         vm.setChecklistPhoto(item.itemId, nuevaRuta)
-                    }
+                    },
+                    onPhotoDeleted = { vm.setChecklistPhoto(item.itemId, null) }
                 )
                 Spacing12()
             }
@@ -308,7 +316,8 @@ fun TrifasicoEvidenciasPosterioresScreen(
                     },
                     onPhotoEdited = { nuevaRuta ->
                         vm.setPostPhoto(slot.index, nuevaRuta)
-                    }
+                    },
+                    onPhotoDeleted = { vm.setPostPhoto(slot.index, null) }
                 )
                 Spacing12()
             }
@@ -350,6 +359,11 @@ fun TrifasicoObservacionesScreen(
                 onValueChange = { index, value -> vm.setObservation(index, value) },
                 onAdd = { vm.addObservation() },
                 onRemove = { vm.removeObservation(it) }
+            )
+            Spacing16()
+            ChecklistObservationsSection(
+                state.checklist.filter { it.status == com.aring.movil.data.panel.ChecklistStatus.CR && it.observation.isNotBlank() }
+                    .map { it.label to it.observation }
             )
         },
         footer = {

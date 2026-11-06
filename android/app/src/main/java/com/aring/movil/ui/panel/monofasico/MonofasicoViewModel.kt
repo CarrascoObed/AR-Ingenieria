@@ -10,22 +10,30 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-class MonofasicoViewModel(private val tareaId: Int) {
+class MonofasicoViewModel(private val tareaId: Int, private val inspectionId: String) {
 
+    private val borradorInicial = TableroDraftStore.cargarMonofasico(tareaId, inspectionId)
     private val _state = MutableStateFlow(
-        TableroDraftStore.cargarMonofasico(tareaId) ?: MonofasicoState()
+        borradorInicial ?: MonofasicoState(inspectionId = inspectionId)
     )
     val state: StateFlow<MonofasicoState> = _state.asStateFlow()
 
+    init {
+        if (borradorInicial?.finished == true) {
+            _state.value = _state.value.copy(finished = false)
+            TableroDraftStore.guardarMonofasico(tareaId, _state.value, inspectionId)
+        }
+    }
+
     private fun cambiar(transformar: (MonofasicoState) -> MonofasicoState) {
         _state.update(transformar)
-        TableroDraftStore.guardarMonofasico(tareaId, _state.value)
+        TableroDraftStore.guardarMonofasico(tareaId, _state.value, inspectionId)
     }
 
     fun startNewInspection() {
-        val nuevo = MonofasicoState()
+        val nuevo = MonofasicoState(inspectionId = inspectionId)
         _state.value = nuevo
-        TableroDraftStore.guardarMonofasico(tareaId, nuevo)
+        TableroDraftStore.guardarMonofasico(tareaId, nuevo, inspectionId)
     }
 
     fun setDescripcion(value: String) =
@@ -37,7 +45,7 @@ class MonofasicoViewModel(private val tareaId: Int) {
     fun setNivel(value: String) =
         cambiar { it.copy(registration = it.registration.copy(nivel = value)) }
 
-    fun setPreviousPhoto(index: Int, path: String) =
+    fun setPreviousPhoto(index: Int, path: String?) =
         cambiar { st ->
             st.copy(
                 previousPhotos = st.previousPhotos.map {
@@ -55,7 +63,7 @@ class MonofasicoViewModel(private val tareaId: Int) {
             )
         }
 
-    fun setMeasurementPhoto(variableId: String, path: String) =
+    fun setMeasurementPhoto(variableId: String, path: String?) =
         cambiar { st ->
             st.copy(
                 measurements = st.measurements.map {
@@ -64,9 +72,9 @@ class MonofasicoViewModel(private val tareaId: Int) {
             )
         }
 
-    fun setReaprietePhoto(path: String) = cambiar { it.copy(reaprietePhoto = path) }
+    fun setReaprietePhoto(path: String?) = cambiar { it.copy(reaprietePhoto = path) }
 
-    fun setAseoPhoto(path: String) = cambiar { it.copy(aseoPhoto = path) }
+    fun setAseoPhoto(path: String?) = cambiar { it.copy(aseoPhoto = path) }
 
     fun setChecklistStatus(itemId: String, status: ChecklistStatus) =
         cambiar { st ->
@@ -77,7 +85,7 @@ class MonofasicoViewModel(private val tareaId: Int) {
             )
         }
 
-    fun setChecklistPhoto(itemId: String, path: String) =
+    fun setChecklistPhoto(itemId: String, path: String?) =
         cambiar { st ->
             st.copy(
                 checklist = st.checklist.map {
@@ -86,7 +94,12 @@ class MonofasicoViewModel(private val tareaId: Int) {
             )
         }
 
-    fun setPostPhoto(index: Int, path: String) =
+    fun setChecklistObservation(itemId: String, value: String) =
+        cambiar { st ->
+            st.copy(checklist = st.checklist.map { if (it.itemId == itemId) it.copy(observation = value) else it })
+        }
+
+    fun setPostPhoto(index: Int, path: String?) =
         cambiar { st ->
             st.copy(
                 postPhotos = st.postPhotos.map {

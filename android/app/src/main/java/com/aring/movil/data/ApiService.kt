@@ -45,20 +45,16 @@ object ApiService {
         return parsearObjeto(ejecutar("POST", "/api/auth/login", cuerpo))
     }
 
-    suspend fun loginTecnico(rut: String, password: String): String =
-        login(rut, password).optString("token")
-
-    suspend fun dashboardStats(): JSONObject =
-        parsearObjeto(ejecutar("GET", "/api/dashboard/stats"))
-
-    suspend fun tareas(): JSONArray =
-        parsearArreglo(ejecutar("GET", "/api/tareas"))
+    suspend fun loginTecnico(rut: String, password: String): String {
+        val respuesta = login(rut, password)
+        if (respuesta.optString("rol") != "ROLE_TECNICO") {
+            throw ApiException("Esta aplicación móvil es exclusiva para técnicos.", 403)
+        }
+        return respuesta.optString("token")
+    }
 
     suspend fun tareasMias(tecnicoId: Int): JSONArray =
         parsearArreglo(ejecutar("GET", "/api/tareas/mias?tecnicoId=$tecnicoId"))
-
-    suspend fun crearTarea(cuerpo: JSONObject): JSONObject =
-        parsearObjeto(ejecutar("POST", "/api/tareas", cuerpo.toString()))
 
     suspend fun iniciarTarea(id: Int, ayudantesIds: List<Int>): JSONObject {
         val arr = JSONArray()
@@ -72,15 +68,6 @@ object ApiService {
         )
     }
 
-    suspend fun actualizarCabeceraTarea(id: Int, tecnicoId: Int): JSONObject =
-        parsearObjeto(
-            ejecutar(
-                "PUT",
-                "/api/tareas/$id",
-                JSONObject().put("tecnicoCabeceraId", tecnicoId).toString()
-            )
-        )
-
     suspend fun cambiarEstadoTarea(id: Int, estado: String): JSONObject =
         parsearObjeto(
             ejecutar(
@@ -90,54 +77,8 @@ object ApiService {
             )
         )
 
-    suspend fun eliminarTarea(id: Int) {
-        ejecutar("DELETE", "/api/tareas/$id")
-    }
-
     suspend fun tecnicos(): JSONArray =
         parsearArreglo(ejecutar("GET", "/api/tecnicos"))
-
-    suspend fun clientes(): JSONArray =
-        parsearArreglo(ejecutar("GET", "/api/clientes"))
-
-    suspend fun crearTecnico(cuerpo: JSONObject): JSONObject =
-        parsearObjeto(ejecutar("POST", "/api/tecnicos", cuerpo.toString()))
-
-    suspend fun actualizarTecnico(id: Int, cuerpo: JSONObject): JSONObject =
-        parsearObjeto(ejecutar("PUT", "/api/tecnicos/$id", cuerpo.toString()))
-
-    suspend fun eliminarTecnico(id: Int) {
-        ejecutar("DELETE", "/api/tecnicos/$id")
-    }
-
-    suspend fun notificaciones(tecnicoId: Int?): JSONArray {
-        val path = if (tecnicoId != null) {
-            "/api/notificaciones?tecnicoId=$tecnicoId"
-        } else {
-            "/api/notificaciones"
-        }
-        return parsearArreglo(ejecutar("GET", path))
-    }
-
-    suspend fun marcarLeida(id: Int): JSONObject =
-        parsearObjeto(ejecutar("PUT", "/api/notificaciones/$id/leida"))
-
-    suspend fun marcarTodasLeidas(tecnicoId: Int?) {
-        val path = if (tecnicoId != null) {
-            "/api/notificaciones/leer-todas?tecnicoId=$tecnicoId"
-        } else {
-            "/api/notificaciones/leer-todas"
-        }
-        ejecutar("PUT", path)
-    }
-
-    suspend fun eliminarNotificaciones() {
-        ejecutar("DELETE", "/api/notificaciones")
-    }
-
-    suspend fun eliminarNotificacionesTecnico(tecnicoId: Int) {
-        ejecutar("DELETE", "/api/notificaciones?tecnicoId=$tecnicoId")
-    }
 
     suspend fun enviarInforme(
         token: String,

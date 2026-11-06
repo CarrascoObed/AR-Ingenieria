@@ -48,7 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aring.movil.data.Prefs
 import com.aring.movil.data.Repositorio
-import com.aring.movil.data.Sesion
+import com.aring.movil.data.Tecnico
 import com.aring.movil.ui.components.BannerError
 import com.aring.movil.ui.components.BtnPrimario
 import com.aring.movil.ui.components.CampoTexto
@@ -64,7 +64,7 @@ import com.aring.movil.ui.theme.VioletaOscuro
 import kotlinx.coroutines.launch
 
 @Composable
-fun LoginScreen(onIngresar: (Sesion) -> Unit) {
+fun LoginScreen(onIngresar: (Tecnico) -> Unit) {
     var usuario by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var recordar by remember { mutableStateOf(false) }

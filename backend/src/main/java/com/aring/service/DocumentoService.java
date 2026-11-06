@@ -106,10 +106,10 @@ public class DocumentoService {
             .ofPattern("MMMM-yyyy", new Locale("es", "CL"))
             .withZone(ZoneId.of("America/Santiago"));
 
-    // Identificadores de termografía definidos en la aplicación Android
-    // (MonofasicoConfig: variable "mono_termografía" y checklist "mono_c9";
-    // TrifasicoConfig: checklist "tri_c21").
-    private static final Set<String> VARIABLES_TERMOGRAFIA = Set.of("mono_termografia", "tri_termografia");
+    // IDs usados por las versiones de Android: el tablero trifásico llama
+    // "tri_temp" a la medición cuya evidencia es la fotografía termográfica.
+    private static final Set<String> VARIABLES_TERMOGRAFIA = Set.of(
+            "mono_termografia", "tri_termografia", "tri_temp");
     private static final Set<String> ITEMS_TERMOGRAFIA = Set.of("mono_c9", "tri_c21");
 
     private static final long ANCHO_PORTADA_EMU = cmToEmu(15.59);
@@ -1035,7 +1035,8 @@ public class DocumentoService {
 
     private boolean esMedicionTermografica(MedicionTablero medicion) {
         return VARIABLES_TERMOGRAFIA.contains(texto(medicion.getVariableId()))
-                || "Termografía".equalsIgnoreCase(texto(medicion.getLabel()));
+                || "Termografía".equalsIgnoreCase(texto(medicion.getLabel()))
+                || "Temperatura".equalsIgnoreCase(texto(medicion.getLabel()));
     }
 
     private boolean esChecklistTermografico(ChecklistTablero item) {

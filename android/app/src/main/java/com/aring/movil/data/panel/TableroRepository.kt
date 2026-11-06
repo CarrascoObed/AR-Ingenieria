@@ -8,20 +8,22 @@ object TableroRepository {
 
     fun buildTrifasico(tareaId: Int, tecnicoId: Int, st: TrifasicoState): JSONObject {
         val root = base(tareaId, tecnicoId, TYPE_TRIFASICO, st.registration.descripcion, st.registration.ubicacion, st.registration.nivel)
+        root.put("clientOperationId", st.inspectionId)
         root.put("tamanioTablero", st.registration.tamanioTablero)
         root.put("mediciones", medicionesTrifasicas(st.measurements))
         root.put("checklist", checklistTrifasico(st.checklist))
         root.put("imagenes", imagenes(st.previousPhotos, st.postPhotos, st.reaprietePhoto, st.aseoPhoto))
-        root.put("observaciones", strings(st.observations))
+        root.put("observaciones", observacionesFinales(st.observations, st.checklist.map { Triple(it.label, it.status, it.observation) }))
         return root
     }
 
     fun buildMonofasico(tareaId: Int, tecnicoId: Int, st: MonofasicoState): JSONObject {
         val root = base(tareaId, tecnicoId, TYPE_MONOFASICO, st.registration.descripcion, st.registration.ubicacion, st.registration.nivel)
+        root.put("clientOperationId", st.inspectionId)
         root.put("mediciones", medicionesMonofasicas(st.measurements))
         root.put("checklist", checklistMonofasico(st.checklist))
         root.put("imagenes", imagenes(st.previousPhotos, st.postPhotos, st.reaprietePhoto, st.aseoPhoto))
-        root.put("observaciones", strings(st.observations))
+        root.put("observaciones", observacionesFinales(st.observations, st.checklist.map { Triple(it.label, it.status, it.observation) }))
         return root
     }
 
@@ -135,7 +137,12 @@ object TableroRepository {
         return arr
     }
 
-    private fun strings(items: List<String>): JSONArray = JSONArray().apply {
-        items.forEach { put(it) }
+    private fun observacionesFinales(
+        observaciones: List<String>,
+        checklist: List<Triple<String, ChecklistStatus?, String>>
+    ): JSONArray = JSONArray().apply {
+        observaciones.forEach { put(it) }
+        checklist.filter { (it.second == ChecklistStatus.CR) && it.third.isNotBlank() }
+            .forEach { (label, _, observation) -> put("$label: $observation") }
     }
 }

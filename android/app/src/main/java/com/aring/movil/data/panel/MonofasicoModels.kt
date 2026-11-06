@@ -18,7 +18,8 @@ data class MonofasicoChecklistItem(
     val itemId: String,
     val label: String,
     val status: ChecklistStatus? = null,
-    val photoPath: String? = null
+    val photoPath: String? = null,
+    val observation: String = ""
 )
 
 data class MonofasicoState(

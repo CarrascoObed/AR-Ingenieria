@@ -16,6 +16,7 @@ import com.aring.movil.camera.OpenCamera
 import com.aring.movil.camera.PhotoBus
 import com.aring.movil.data.panel.TYPE_MONOFASICO
 import com.aring.movil.data.panel.TYPE_TRIFASICO
+import com.aring.movil.data.panel.newId
 import com.aring.movil.ui.panel.monofasico.MonofasicoChecklistScreen
 import com.aring.movil.ui.panel.monofasico.MonofasicoEvidenciasPosterioresScreen
 import com.aring.movil.ui.panel.monofasico.MonofasicoEvidenciasPreviasScreen
@@ -60,11 +61,12 @@ private val SubPantallaSaver = listSaver<SubPantalla, String>(
 fun TableroFlujo(
     tipo: String,
     tareaId: Int,
+    inspectionId: String = newId(),
     onFinalizado: () -> Unit,
     onVolver: () -> Unit
 ) {
-    val trifasicoVm = remember(tareaId) { TrifasicoViewModel(tareaId) }
-    val monofasicoVm = remember(tareaId) { MonofasicoViewModel(tareaId) }
+    val trifasicoVm = remember(tareaId, inspectionId) { TrifasicoViewModel(tareaId, inspectionId) }
+    val monofasicoVm = remember(tareaId, inspectionId) { MonofasicoViewModel(tareaId, inspectionId) }
     var sub by rememberSaveable(stateSaver = SubPantallaSaver) {
         mutableStateOf<SubPantalla>(SubPantalla.Registro)
     }

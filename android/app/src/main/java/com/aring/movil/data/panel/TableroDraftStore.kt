@@ -18,38 +18,50 @@ object TableroDraftStore {
      * cuando ambas cuentas se usan en el mismo dispositivo; cada técnico abre
      * siempre su propio tablero dentro de la tarea.
      */
-    private fun key(tareaId: Int, tipo: String): String {
+    private fun key(tareaId: Int, tipo: String, inspectionId: String = "legacy"): String {
         val tecnicoId = runCatching { com.aring.movil.data.Prefs.leerTecnico()?.id }.getOrNull() ?: 0
-        return "draft_${tecnicoId}_${tareaId}_$tipo"
+        if (inspectionId == "legacy") return "draft_${tecnicoId}_${tareaId}_$tipo"
+        return "draft_${tecnicoId}_${tareaId}_${tipo}_$inspectionId"
     }
 
-    fun limpiar(tareaId: Int, tipo: String) {
-        prefs.edit().remove(key(tareaId, tipo)).apply()
+    data class Borrador(val id: String, val tipo: String, val descripcion: String, val ubicacion: String, val terminado: Boolean)
+
+    fun listar(tareaId: Int): List<Borrador> {
+        val tecnicoId = runCatching { com.aring.movil.data.Prefs.leerTecnico()?.id }.getOrNull() ?: 0
+        val prefix = "draft_${tecnicoId}_${tareaId}_"
+        return prefs.all.entries.mapNotNull { (k, raw) ->
+            if (!k.startsWith(prefix) || raw !is String) return@mapNotNull null
+            runCatching {
+                val p = k.removePrefix(prefix).split('_', limit = 2)
+                val json = JSONObject(raw)
+                val tipo = p[0]
+                Borrador(p.getOrElse(1) { "legacy" }, tipo, json.optString("descripcion"), json.optString("ubicacion"), json.optBoolean("finished"))
+            }.getOrNull()
+        }.sortedBy { it.id }
     }
 
-    fun limpiarTarea(tareaId: Int) {
-        prefs.edit()
-            .remove(key(tareaId, TYPE_TRIFASICO))
-            .remove(key(tareaId, TYPE_MONOFASICO))
-            .apply()
+    fun limpiar(tareaId: Int, tipo: String, inspectionId: String) { prefs.edit().remove(key(tareaId, tipo, inspectionId)).apply() }
+    fun limpiarTarea(tareaId: Int, tecnicoId: Int = runCatching { com.aring.movil.data.Prefs.leerTecnico()?.id }.getOrNull() ?: 0) {
+        val prefix = "draft_${tecnicoId}_${tareaId}_"
+        prefs.edit().also { editor -> prefs.all.keys.filter { it.startsWith(prefix) }.forEach(editor::remove) }.apply()
     }
 
-    fun guardarTrifasico(tareaId: Int, st: TrifasicoState) {
-        prefs.edit().putString(key(tareaId, TYPE_TRIFASICO), jsonTrifasico(st).toString()).apply()
+    fun guardarTrifasico(tareaId: Int, st: TrifasicoState, inspectionId: String = st.inspectionId) {
+        prefs.edit().putString(key(tareaId, TYPE_TRIFASICO, inspectionId), jsonTrifasico(st).put("finished", st.finished).toString()).apply()
     }
 
-    fun cargarTrifasico(tareaId: Int): TrifasicoState? {
-        val raw = prefs.getString(key(tareaId, TYPE_TRIFASICO), null) ?: return null
-        return runCatching { trifasicoDesdeJson(JSONObject(raw)) }.getOrNull()
+    fun cargarTrifasico(tareaId: Int, inspectionId: String = "legacy"): TrifasicoState? {
+        val raw = prefs.getString(key(tareaId, TYPE_TRIFASICO, inspectionId), null) ?: return null
+        return runCatching { trifasicoDesdeJson(JSONObject(raw)).copy(inspectionId = inspectionId, finished = JSONObject(raw).optBoolean("finished")) }.getOrNull()
     }
 
-    fun guardarMonofasico(tareaId: Int, st: MonofasicoState) {
-        prefs.edit().putString(key(tareaId, TYPE_MONOFASICO), jsonMonofasico(st).toString()).apply()
+    fun guardarMonofasico(tareaId: Int, st: MonofasicoState, inspectionId: String = st.inspectionId) {
+        prefs.edit().putString(key(tareaId, TYPE_MONOFASICO, inspectionId), jsonMonofasico(st).put("finished", st.finished).toString()).apply()
     }
 
-    fun cargarMonofasico(tareaId: Int): MonofasicoState? {
-        val raw = prefs.getString(key(tareaId, TYPE_MONOFASICO), null) ?: return null
-        return runCatching { monofasicoDesdeJson(JSONObject(raw)) }.getOrNull()
+    fun cargarMonofasico(tareaId: Int, inspectionId: String = "legacy"): MonofasicoState? {
+        val raw = prefs.getString(key(tareaId, TYPE_MONOFASICO, inspectionId), null) ?: return null
+        return runCatching { monofasicoDesdeJson(JSONObject(raw)).copy(inspectionId = inspectionId, finished = JSONObject(raw).optBoolean("finished")) }.getOrNull()
     }
 
     private fun fotosJson(fotos: List<PhotoSlot>): JSONArray = JSONArray().apply {
@@ -71,9 +83,11 @@ object TableroDraftStore {
         items.forEach { (id, v, p) -> put(JSONObject().put("id", id).put("v", v).put("p", p ?: "")) }
     }
 
-    private fun checklistJson(items: List<Triple<String, ChecklistStatus?, String?>>): JSONArray = JSONArray().apply {
-        items.forEach { (id, s, p) ->
-            put(JSONObject().put("id", id).put("s", s?.name).put("p", p ?: ""))
+    private data class ChecklistDraft(val id: String, val status: ChecklistStatus?, val photoPath: String?, val observation: String)
+
+    private fun checklistJson(items: List<ChecklistDraft>): JSONArray = JSONArray().apply {
+        items.forEach { item ->
+            put(JSONObject().put("id", item.id).put("s", item.status?.name).put("p", item.photoPath ?: "").put("o", item.observation))
         }
     }
 
@@ -97,7 +111,7 @@ object TableroDraftStore {
         o.put("aseoFoto", st.aseoPhoto.orEmpty())
         o.put("previousPhotos", fotosJson(st.previousPhotos))
         o.put("mediciones", medicionesJson(st.measurements.map { Triple(it.variableId, it.value, it.photoPath) }))
-        o.put("checklist", checklistJson(st.checklist.map { Triple(it.itemId, it.status, it.photoPath) }))
+        o.put("checklist", checklistJson(st.checklist.map { ChecklistDraft(it.itemId, it.status, it.photoPath, it.observation) }))
         o.put("postPhotos", fotosJson(st.postPhotos))
         return o
     }
@@ -112,7 +126,7 @@ object TableroDraftStore {
         o.put("aseoFoto", st.aseoPhoto.orEmpty())
         o.put("previousPhotos", fotosJson(st.previousPhotos))
         o.put("mediciones", medicionesJson(st.measurements.map { Triple(it.variableId, it.value, it.photoPath) }))
-        o.put("checklist", checklistJson(st.checklist.map { Triple(it.itemId, it.status, it.photoPath) }))
+        o.put("checklist", checklistJson(st.checklist.map { ChecklistDraft(it.itemId, it.status, it.photoPath, it.observation) }))
         o.put("postPhotos", fotosJson(st.postPhotos))
         return o
     }
@@ -128,12 +142,16 @@ object TableroDraftStore {
         return mapa
     }
 
-    private fun checklistDesdeJson(arr: JSONArray?, base: Map<String, Pair<ChecklistStatus?, String?>>): Map<String, Pair<ChecklistStatus?, String?>> {
+    private fun checklistDesdeJson(arr: JSONArray?, base: Map<String, Triple<ChecklistStatus?, String?, String>>): Map<String, Triple<ChecklistStatus?, String?, String>> {
         val mapa = base.toMutableMap()
         arr?.let { a ->
             for (j in 0 until a.length()) {
                 val e = a.getJSONObject(j)
-                mapa[e.getString("id")] = runCatching { ChecklistStatus.valueOf(e.optString("s")) }.getOrNull() to e.optString("p").ifEmpty { null }
+                mapa[e.getString("id")] = Triple(
+                    runCatching { ChecklistStatus.valueOf(e.optString("s")) }.getOrNull(),
+                    e.optString("p").ifEmpty { null },
+                    e.optString("o")
+                )
             }
         }
         return mapa
@@ -159,7 +177,7 @@ object TableroDraftStore {
             aseoPhoto = o.optString("aseoFoto").ifEmpty { null },
             checklist = base.checklist.map { c ->
                 val d = checklist[c.itemId]
-                c.copy(status = d?.first, photoPath = d?.second)
+                c.copy(status = d?.first, photoPath = d?.second, observation = d?.third.orEmpty())
             },
             postPhotos = fotosDesdeJson(o.optJSONArray("postPhotos"), 2),
             observations = observacionesDesdeJson(o),
@@ -185,7 +203,7 @@ object TableroDraftStore {
             aseoPhoto = o.optString("aseoFoto").ifEmpty { null },
             checklist = base.checklist.map { c ->
                 val d = checklist[c.itemId]
-                c.copy(status = d?.first, photoPath = d?.second)
+                c.copy(status = d?.first, photoPath = d?.second, observation = d?.third.orEmpty())
             },
             postPhotos = fotosDesdeJson(o.optJSONArray("postPhotos"), 2),
             observations = observacionesDesdeJson(o),

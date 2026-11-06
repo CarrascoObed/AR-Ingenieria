@@ -8,9 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -33,14 +31,12 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
-import com.aring.movil.data.Admin
 import com.aring.movil.data.ApiException
 import com.aring.movil.data.ApiService
 import com.aring.movil.data.OfflineSync
 import com.aring.movil.data.OfflineTaskCache
 import com.aring.movil.data.Prefs
 import com.aring.movil.data.Repositorio
-import com.aring.movil.data.Sesion
 import com.aring.movil.data.Tarea
 import com.aring.movil.data.Tecnico
 import com.aring.movil.data.inicialesDe
@@ -48,20 +44,15 @@ import com.aring.movil.data.panel.TableroDraftStore
 import com.aring.movil.data.panel.TableroRepository
 import com.aring.movil.data.panel.TYPE_MONOFASICO
 import com.aring.movil.data.panel.TYPE_TRIFASICO
+import com.aring.movil.data.panel.newId
 import com.aring.movil.ui.components.BannerError
 import com.aring.movil.ui.components.BarraNavegacion
 import com.aring.movil.ui.components.ConfirmarDialog
-import com.aring.movil.ui.components.HojaNotificaciones
-import com.aring.movil.ui.components.HojaNotificacionesTecnico
 import com.aring.movil.ui.components.TopBar
-import com.aring.movil.ui.panel.EnviarInformeScreen
 import com.aring.movil.ui.panel.TableroConfirmacion
 import com.aring.movil.ui.panel.TableroFlujo
 import com.aring.movil.ui.panel.TableroSeleccion
-import com.aring.movil.ui.screens.DashboardScreen
 import com.aring.movil.ui.screens.LoginScreen
-import com.aring.movil.ui.screens.TareasScreen
-import com.aring.movil.ui.screens.TecnicosScreen
 import com.aring.movil.ui.tecnico.DetalleTareaTecnico
 import com.aring.movil.ui.tecnico.IngresarTareaScreen
 import com.aring.movil.ui.tecnico.TareasTecnicoScreen
@@ -70,35 +61,22 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private val ITEMS_ADMIN = listOf(
-    "Dashboard" to Icons.Filled.Home,
-    "Técnicos" to Icons.Filled.Person,
-    "Tareas" to Icons.Filled.List,
-)
-
 private val ITEMS_TECNICO = listOf(
     "Tareas" to Icons.Filled.List,
 )
 
 @Composable
 fun App() {
-    var admin by remember { mutableStateOf(Prefs.leerAdmin()) }
     var tecnico by remember { mutableStateOf(Prefs.leerTecnico()) }
 
     LaunchedEffect(Unit) {
-        ApiService.token = admin?.token ?: Prefs.leerTokenTecnico()
+        // Borra sesiones de administrador guardadas por versiones anteriores de la app.
+        Prefs.borrarAdmin()
+        ApiService.token = Prefs.leerTokenTecnico()
     }
 
-    when {
-        admin != null -> MainScreen(
-            admin = admin!!,
-            onCerrarSesion = {
-                Prefs.borrarAdmin()
-                ApiService.token = null
-                admin = null
-            }
-        )
-        tecnico != null -> MainScreenTecnico(
+    if (tecnico != null) {
+        MainScreenTecnico(
             tecnico = tecnico!!,
             onCerrarSesion = {
                 Prefs.borrarTecnico()
@@ -107,93 +85,12 @@ fun App() {
                 tecnico = null
             }
         )
-        else -> LoginScreen { s ->
-            when (s) {
-                is Sesion.AdminSesion -> {
-                    Prefs.guardarAdmin(s.admin)
-                    Prefs.borrarTecnico()
-                    Prefs.borrarTokenTecnico()
-                    ApiService.token = s.admin.token
-                    admin = s.admin
-                }
-                is Sesion.TecnicoSesion -> {
-                    Prefs.guardarTecnico(s.tecnico)
-                    Prefs.guardarTokenTecnico(ApiService.token ?: "")
-                    Prefs.borrarAdmin()
-                    tecnico = s.tecnico
-                }
-            }
+    } else {
+        LoginScreen { t ->
+            Prefs.guardarTecnico(t)
+            Prefs.guardarTokenTecnico(ApiService.token ?: "")
+            tecnico = t
         }
-    }
-}
-
-@Composable
-fun MainScreen(admin: Admin, onCerrarSesion: () -> Unit) {
-    var tab by rememberSaveable { mutableIntStateOf(0) }
-    var clave by remember { mutableIntStateOf(0) }
-    var refrescando by remember { mutableStateOf(false) }
-    var notifAbierto by remember { mutableStateOf(false) }
-    var confirmarSalida by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
-    val noLeidas = Repositorio.notificaciones.count { !it.leida }
-
-    LaunchedEffect(Unit) {
-        refrescando = true
-        runCatching { Repositorio.cargarAdmin() }
-        refrescando = false
-    }
-
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(FondoGris)
-    ) {
-        TopBar(
-            iniciales = admin.iniciales,
-            nombre = admin.nombre,
-            apellido = admin.apellido,
-            refrescando = refrescando,
-            noLeidas = noLeidas,
-            onRefresh = {
-                scope.launch {
-                    refrescando = true
-                    runCatching { Repositorio.cargarAdmin() }
-                    clave++
-                    refrescando = false
-                }
-            },
-            onAbrirNotificaciones = { notifAbierto = true },
-            onCerrarSesion = { confirmarSalida = true }
-        )
-
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            when (tab) {
-                0 -> DashboardScreen(admin, clave)
-                1 -> TecnicosScreen(clave)
-                else -> TareasScreen(clave)
-            }
-        }
-
-        BarraNavegacion(items = ITEMS_ADMIN, actual = tab, onSeleccionar = { tab = it })
-    }
-
-    if (notifAbierto) {
-        HojaNotificaciones(onCerrar = { notifAbierto = false })
-    }
-
-    if (confirmarSalida) {
-        ConfirmarDialog(
-            titulo = "Cerrar sesión",
-            mensaje = "¿Realmente desea cerrar sesión?",
-            confirmarTexto = "Sí",
-            cancelarTexto = "No",
-            onConfirmar = {
-                confirmarSalida = false
-                onCerrarSesion()
-            },
-            onCancelar = { confirmarSalida = false }
-        )
     }
 }
 
@@ -202,8 +99,7 @@ private sealed interface PantallaTec {
     data class Detalle(val tarea: Tarea) : PantallaTec
     data class Ingresar(val tarea: Tarea) : PantallaTec
     data class SeleccionTablero(val tarea: Tarea) : PantallaTec
-    data class FlujoTablero(val tarea: Tarea, val tipo: String) : PantallaTec
-    data class EnviarInforme(val tarea: Tarea, val tipo: String) : PantallaTec
+    data class FlujoTablero(val tarea: Tarea, val tipo: String, val inspectionId: String) : PantallaTec
     data class Confirmacion(val tarea: Tarea) : PantallaTec
 }
 
@@ -214,8 +110,7 @@ private val PantallaTecSaver = listSaver<PantallaTec, String>(
             is PantallaTec.Detalle -> listOf("Detalle", pantalla.tarea.id.toString())
             is PantallaTec.Ingresar -> listOf("Ingresar", pantalla.tarea.id.toString())
             is PantallaTec.SeleccionTablero -> listOf("SeleccionTablero", pantalla.tarea.id.toString())
-            is PantallaTec.FlujoTablero -> listOf("FlujoTablero", pantalla.tarea.id.toString(), pantalla.tipo)
-            is PantallaTec.EnviarInforme -> listOf("EnviarInforme", pantalla.tarea.id.toString(), pantalla.tipo)
+            is PantallaTec.FlujoTablero -> listOf("FlujoTablero", pantalla.tarea.id.toString(), pantalla.tipo, pantalla.inspectionId)
             is PantallaTec.Confirmacion -> listOf("Confirmacion", pantalla.tarea.id.toString())
         }
     },
@@ -226,8 +121,7 @@ private val PantallaTecSaver = listSaver<PantallaTec, String>(
             "Detalle" -> tarea?.let { PantallaTec.Detalle(it) }
             "Ingresar" -> tarea?.let { PantallaTec.Ingresar(it) }
             "SeleccionTablero" -> tarea?.let { PantallaTec.SeleccionTablero(it) }
-            "FlujoTablero" -> tarea?.let { PantallaTec.FlujoTablero(it, lista.getOrNull(2) ?: "") }
-            "EnviarInforme" -> tarea?.let { PantallaTec.EnviarInforme(it, lista.getOrNull(2) ?: "") }
+            "FlujoTablero" -> tarea?.let { PantallaTec.FlujoTablero(it, lista.getOrNull(2) ?: "", lista.getOrNull(3) ?: newId()) }
             "Confirmacion" -> tarea?.let { PantallaTec.Confirmacion(it) }
             else -> null
         } ?: PantallaTec.Lista
@@ -237,8 +131,6 @@ private val PantallaTecSaver = listSaver<PantallaTec, String>(
 @Composable
 fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
     val context = LocalContext.current
-    var refrescando by remember { mutableStateOf(false) }
-    var notifAbierto by remember { mutableStateOf(false) }
     var confirmarSalida by remember { mutableStateOf(false) }
     var pantalla by rememberSaveable(stateSaver = PantallaTecSaver) {
         mutableStateOf<PantallaTec>(PantallaTec.Lista)
@@ -248,16 +140,12 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
     var errorFinalizar by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
-    val noLeidas = Repositorio.noLeidasTecnico(tecnico.id)
-
     fun refrescarTecnico() {
         scope.launch { runCatching { Repositorio.cargarTecnico(tecnico.id) } }
     }
 
     LaunchedEffect(Unit) {
-        refrescando = true
         runCatching { Repositorio.cargarTecnico(tecnico.id) }
-        refrescando = false
     }
 
     // Fase 1a: al recuperar conexión se re-programa el envío del outbox y se refresca la vista,
@@ -313,30 +201,17 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
             .fillMaxSize()
             .background(FondoGris)
     ) {
-        val ocultarTopBar = pantalla is PantallaTec.FlujoTablero ||
-            pantalla is PantallaTec.EnviarInforme ||
-            pantalla is PantallaTec.Confirmacion
+        val ocultarTopBar = pantalla is PantallaTec.FlujoTablero || pantalla is PantallaTec.Confirmacion
         if (!ocultarTopBar) {
             TopBar(
                 iniciales = inicialesDe(tecnico.nombre, tecnico.apellido),
                 nombre = tecnico.nombre,
                 apellido = tecnico.apellido,
-                refrescando = refrescando,
-                noLeidas = noLeidas,
                 onBack = if (pantalla is PantallaTec.Lista) {
                     null
                 } else {
                     { volver() }
                 },
-                onRefresh = {
-                    scope.launch {
-                        refrescando = true
-                        OfflineSync.reintentarPendientes(context)
-                        runCatching { Repositorio.cargarTecnico(tecnico.id) }
-                        refrescando = false
-                    }
-                },
-                onAbrirNotificaciones = { notifAbierto = true },
                 onCerrarSesion = { confirmarSalida = true }
             )
         }
@@ -359,7 +234,9 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                     DetalleTareaTecnico(
                         tarea = tarea,
                         onIngresar = {
-                            pantalla = if (tarea.esInvitado(tecnico.id)) {
+                            pantalla = if (OfflineSync.pendiente(tarea.id) && tarea.esCabecera(tecnico.id)) {
+                                PantallaTec.SeleccionTablero(tarea)
+                            } else if (tarea.esInvitado(tecnico.id)) {
                                 PantallaTec.SeleccionTablero(tarea)
                             } else {
                                 PantallaTec.Ingresar(tarea)
@@ -376,8 +253,10 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                     val tarea = tareaActual(p.tarea)
                     TableroSeleccion(
                         tarea = tarea,
+                        borradores = TableroDraftStore.listar(tarea.id),
                         puedeFinalizar = !tarea.esInvitado(tecnico.id),
-                        onSeleccionarTipo = { pantalla = PantallaTec.FlujoTablero(p.tarea, it) },
+                        onSeleccionarTipo = { tipo -> pantalla = PantallaTec.FlujoTablero(p.tarea, tipo, newId()) },
+                        onEditar = { borrador -> pantalla = PantallaTec.FlujoTablero(p.tarea, borrador.tipo, borrador.id) },
                         onFinalizar = {
                             tareaFinalizarId = p.tarea.id
                             confirmarFinalizar = true
@@ -388,18 +267,8 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                 is PantallaTec.FlujoTablero -> TableroFlujo(
                     tipo = p.tipo,
                     tareaId = p.tarea.id,
-                    onFinalizado = { pantalla = PantallaTec.EnviarInforme(p.tarea, p.tipo) },
-                    onVolver = { pantalla = PantallaTec.SeleccionTablero(p.tarea) }
-                )
-                is PantallaTec.EnviarInforme -> EnviarInformeScreen(
-                    tarea = tareaActual(p.tarea),
-                    tipo = p.tipo,
-                    tecnico = tecnico,
-                    onGuardado = {
-                        scope.launch { runCatching { Repositorio.cargarTecnico(tecnico.id) } }
-                        TableroDraftStore.limpiar(p.tarea.id, p.tipo)
-                        pantalla = PantallaTec.SeleccionTablero(p.tarea)
-                    },
+                    inspectionId = p.inspectionId,
+                    onFinalizado = { pantalla = PantallaTec.SeleccionTablero(p.tarea) },
                     onVolver = { pantalla = PantallaTec.SeleccionTablero(p.tarea) }
                 )
                 is PantallaTec.Confirmacion -> TableroConfirmacion(
@@ -420,20 +289,6 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
         }
     }
 
-    if (notifAbierto) {
-        HojaNotificacionesTecnico(
-            tecnicoId = tecnico.id,
-            onCerrar = { notifAbierto = false },
-            onAbrirTarea = { id ->
-                val tarea = Repositorio.tareas.firstOrNull { it.id == id }
-                if (tarea != null) {
-                    notifAbierto = false
-                    pantalla = PantallaTec.Detalle(tarea)
-                }
-            }
-        )
-    }
-
     if (confirmarSalida) {
         ConfirmarDialog(
             titulo = "Cerrar sesión",
@@ -451,7 +306,7 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
     if (confirmarFinalizar) {
         ConfirmarDialog(
             titulo = "Finalizar tarea",
-            mensaje = "¿Realmente desea finalizar la tarea? Se enviarán los tableros pendientes.",
+            mensaje = "Revise los tableros realizados. Al confirmar, se enviarán todos los informes y se cerrará la tarea.",
             confirmarTexto = "Sí",
             cancelarTexto = "No",
             onConfirmar = {
@@ -464,32 +319,39 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                             errorFinalizar = "Solo el técnico responsable puede finalizar la tarea."
                             return@launch
                         }
-                        val trifasico = TableroDraftStore.cargarTrifasico(tareaFinalizarId)
-                        val monofasico = TableroDraftStore.cargarMonofasico(tareaFinalizarId)
-                        if (trifasico != null) {
-                            val informe = withContext(Dispatchers.Default) { TableroRepository.buildTrifasico(tareaFinalizarId, tecnico.id, trifasico) }
-                            withContext(Dispatchers.IO) { OfflineSync.guardarInforme(tareaFinalizarId, tecnico, informe) }
-                            Repositorio.registrarTableroEnDispositivo(tareaFinalizarId)
-                            TableroDraftStore.limpiar(tareaFinalizarId, TYPE_TRIFASICO)
-                        }
-                        if (monofasico != null) {
-                            val informe = withContext(Dispatchers.Default) { TableroRepository.buildMonofasico(tareaFinalizarId, tecnico.id, monofasico) }
-                            withContext(Dispatchers.IO) { OfflineSync.guardarInforme(tareaFinalizarId, tecnico, informe) }
-                            Repositorio.registrarTableroEnDispositivo(tareaFinalizarId)
-                            TableroDraftStore.limpiar(tareaFinalizarId, TYPE_MONOFASICO)
-                        }
-                        val cantidadTableros = Repositorio.tareas.firstOrNull { it.id == tareaFinalizarId }?.tablerosRealizados
-                            ?: tarea.tablerosRealizados
-                        if (OfflineSync.informes(tareaFinalizarId).isEmpty() && cantidadTableros == 0) {
+                        val borradores = TableroDraftStore.listar(tareaFinalizarId)
+                        if (borradores.isEmpty() && tarea.tablerosRealizados == 0 && OfflineSync.informes(tareaFinalizarId).isEmpty()) {
                             errorFinalizar = "Esta tarea no tiene tableros inspeccionados. Registre al menos uno antes de finalizar."
                             return@launch
                         }
+                        if (borradores.any { !it.terminado }) {
+                            errorFinalizar = "Hay tableros sin completar. Ábralos, termine su registro y vuelva a revisar antes de cerrar la tarea."
+                            return@launch
+                        }
+                        val cierreYaPendiente = OfflineSync.pendiente(tareaFinalizarId)
+                        borradores.forEach { borrador ->
+                            val informe = withContext(Dispatchers.Default) {
+                                when (borrador.tipo) {
+                                    TYPE_TRIFASICO -> TableroDraftStore.cargarTrifasico(tareaFinalizarId, borrador.id)?.let { TableroRepository.buildTrifasico(tareaFinalizarId, tecnico.id, it) }
+                                    TYPE_MONOFASICO -> TableroDraftStore.cargarMonofasico(tareaFinalizarId, borrador.id)?.let { TableroRepository.buildMonofasico(tareaFinalizarId, tecnico.id, it) }
+                                    else -> null
+                                }
+                            } ?: error("No se pudo recuperar uno de los tableros guardados.")
+                            withContext(Dispatchers.IO) { OfflineSync.guardarInforme(tareaFinalizarId, tecnico, informe, deferUntilFinalization = true) }
+                        }
                         OfflineSync.finalizar(tareaFinalizarId, tecnico)
-                        val finalLocal = tarea.copy(estado = "Finalizada", sincronizacionPendiente = true)
+                        val actualizada = Repositorio.tareas.firstOrNull { it.id == tareaFinalizarId } ?: tarea
+                        val finalLocal = actualizada.copy(
+                            estado = "Finalizada",
+                            sincronizacionPendiente = true,
+                            tablerosRealizados = maxOf(
+                                actualizada.tablerosRealizados,
+                                tarea.tablerosRealizados + if (cierreYaPendiente) 0 else borradores.size
+                            )
+                        )
                         val index = Repositorio.tareas.indexOfFirst { it.id == tareaFinalizarId }
                         if (index >= 0) Repositorio.tareas[index] = finalLocal
                         OfflineTaskCache.save(tecnico.id, Repositorio.tareas.toList())
-                        TableroDraftStore.limpiarTarea(tareaFinalizarId)
                         pantalla = PantallaTec.Confirmacion(finalLocal)
                     } catch (e: Exception) {
                         errorFinalizar = e.message ?: "No se pudo guardar la finalización en el dispositivo."

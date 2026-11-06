@@ -1,6 +1,6 @@
 # CONTEXT.md — Contexto completo del proyecto AR-Ingeniería
 
-> Documento revisado el 2026-10-31 contrastando la implementación actual de `AR-Ingenieria/`; incluye cambios locales posteriores al commit `a95d69a` (solo pestaña Tareas para técnico, sin generar APK).
+> Documento revisado el 2026-11-05 contrastando la implementación actual de `AR-Ingenieria/`; incluye cambios locales de revisión de tableros, evidencias y acceso móvil solo para técnicos (sin generar APK ni ejecutar pruebas).
 > Fuente del análisis: `C:\Mis proyectos\AR-Ingenieria\AR-Ingenieria`
 > Propósito: dar todo el contexto del sistema (funcional, técnico y de negocio) a cualquier desarrollador, agente de IA o nuevo integrante del equipo.
 
@@ -30,7 +30,7 @@ AR-Ingenieria/
 ├── .gitignore
 ├── backend/               # Spring Boot 3.3.5 / Java 21 → microservicio REST
 ├── frontend/              # React 18 + Vite → SPA del panel de administración (servida en Nginx)
-├── android/               # App Android Kotlin + Jetpack Compose  "ARIngMovil" (admin + técnico)
+├── android/               # App Android Kotlin + Jetpack Compose "ARIngMovil" (solo técnico)
 ├── deployment/            # Guía de Cloudflare Tunnel y script SQL de limpieza
 └── performance/           # Escenarios k6 y resultados de pruebas de carga
 ```
@@ -104,7 +104,7 @@ El login (`POST /api/auth/login`) busca en este orden: Admin por `username` → 
   - Única ruta pública: `POST /api/auth/login`. Todo lo demás exige token. `@PreAuthorize("hasRole('SUPER')")` protege `/api/super/**`.
   - `SecurityFilterChain` stateless, CSRF off; la API exige autenticación salvo el login y `/api/super/**` además exige rol SUPER. CORS permite `localhost:*`, `127.0.0.1:*`, las IPs LAN codificadas (`192.168.1.1`, `.12`, `.13`, `.22`) y `https://ar-ingenieria.taila89688.ts.net` para el panel web. CORS aplica a navegador; el cliente Android nativo usa HTTPS/OkHttp.
 - **FRONTEND web:** el panel es **exclusivo de administradores y superusuarios**; si un técnico intenta loguear web recibe "Acceso restringido: esta aplicación es solo para administradores." Guardas: `RequirePanelAdmin` (admin o super), `RequireAdmin`, `RequireSuper`, `PantallaHabilitada(nombre)`.
-- **APP Android:** autologin por rol: si Prefs tiene sesiones de admin o de técnico arranca en `MainScreen` o `MainScreenTecnico` (exclusión mutua de roles).
+- **APP Android:** acceso exclusivo para técnicos. El login móvil rechaza cualquier rol distinto de `ROLE_TECNICO`; al iniciar se limpian credenciales de administrador heredadas de versiones anteriores. La administración permanece en el panel web.
   - Flujo del técnico: pilas de pantallas preds `PantallaTec` con listSaver (sobrevive rotación y muerte de proceso).
   - El técnico **invitado (ayudante)** NO puede finalizar tareas y salta `IngresarTareaScreen`; solo el **cabecera** inicia con invitados y finaliza.
 
@@ -254,7 +254,7 @@ Docker backend: imagen base `maven:3.9-eclipse-temurin-21` build + `eclipse-temu
 
 **Selector de clientes al crear tarea (web):** `Tareas.jsx` normaliza la búsqueda (`normalizar()` quita tildes/ñ) para sugerencias tolerantes a acentos, muestra todos los clientes registrados al enfocar el campo con texto vacío y avisa cuando no hay coincidencia ("La tarea se creará sin cliente asociado"); sin cliente seleccionado el `clienteId` va null.
 
-**Selector de clientes al crear tarea (móvil admin, paridad con web):** la app Android del administrador ahora descarga `/api/clientes` (`Repositorio.clientes`, cargado en `cargarAdmin`) y en el modal "Crear tarea" despliega sugerencias al escribir la dirección, insensibles a tildes/ñ (`Repositorio.sugerenciasClientes`); seleccionar un cliente rellena recinto y envía `clienteId` a `POST /tareas`, de modo que la tarea queda vinculada al cliente igual que en el panel web.
+**Selector de clientes al crear tarea (móvil admin, historial):** versiones previas de la app Android permitían que el administrador descargara `/api/clientes` y asociara un cliente al crear una tarea. La gestión administrativa móvil fue retirada; la creación y edición de tareas se realiza ahora desde el panel web.
 
 ---
 
@@ -297,8 +297,7 @@ Dockerfile frontend multi-stage: build `node:22-alpine` (copia package.json, `np
 ```text
 App.kt
 ├── LoginScreen (solo si no hay sesión almacenada)
-│    └── POST /api/auth/login → AdminSesion | TecnicoSesion
-├── ADMIN → MainScreen:  BarraNavegación con ids: Dashboard / Técnicos / Tareas
+│    └── POST /api/auth/login → solo se acepta ROLE_TECNICO
 └── TÉCNICO → MainScreenTecnico:
       única pestaña: Tareas
       pila: Lista → Detalle(tarea)
@@ -306,8 +305,9 @@ App.kt
               └→ tablero de flujo → TableroSeleccion (tipo) → TableroFlujo(Registro→EvidenciasPrevias→Variables→
                         Checklist→EvidenciasPosteriores→Observaciones) → EnviarInformeScreen → TableroConfirmacion
 ```
-- El técnico invitado no ve `IngresarTareaScreen` ni puede finalizar; el cabecera ya finalizado navega al historial "Tareas asignadas" en la hoja de notificaciones.
-- Prefs: ficha `SharedPreferences "aring_movil"` con **sistema de secretos en texto plano** (tecnico_password, cred_user, cred_pass, tokens, ocultas_finalizadas).
+- La app móvil es solo para técnicos. Se quitaron las pantallas móviles administrativas (Dashboard, Técnicos y Tareas), el acceso de administrador y los controles de refresco manual y notificaciones del navbar. El backend y el panel web conservan los roles y las notificaciones administrativas.
+- El técnico invitado no ve `IngresarTareaScreen` ni puede finalizar; las tareas finalizadas se consultan desde la lista/historial del técnico.
+- Prefs: ficha `SharedPreferences "aring_movil"` conserva estado de sesión y sincronización local; al actualizar se eliminan credenciales heredadas de administrador.
 
 ### Registro de tablero (el módulo estrella)
 - Constantes de tipo `Trifasico` vs `Monofasico` con configuración distinta:
@@ -315,16 +315,20 @@ App.kt
   - **Trifásico:** **11 variables** (corrientes I(1..3), voltajes F1-F2/F1-F3/F2-F3/F1-N/F2-N/F3-N/N-T, Temperatura) + **21 checks** + campo `tamanioTablero` (Pequeño/Mediano/Grande/Especial).
   - `Reapriete` y `Aseo` = solo selector `Sí / No / N/A` (por fase de Variables).
   - **Validación (6 fases):** F1 datos del registro (trifásico también requiere tamaño), F2 fotos previas (2 obligatorias), F3 **foto por cada variable** (`"Debe tomar la fotografía de {label}"` — el input de valor se oculta (`showValueInput = false`) pero campos Numéricos no se exigidos) + Reapriete + Aseo, F4 checklist con estado por item y **C/R obliga foto** ("Evidencia fotográfica requerida para..."), F5 2 fotos posteriores, F6 observaciones libres.
-- **Persistencia local:** `TableroDraftStore` (SharedPreferences `"aring_tableros"`, clave `draft_{tecnicoId}_{tareaId}_{tipo}` desde el 2026-10-31; antes era `draft_{tareaId}_{tipo}`) guarda cada cambio del formulario. El técnico en la clave evita que el ayudante retome —en el mismo dispositivo— el borrador que dejó el técnico de cabecera: cada cuenta ve solo su propio tablero en curso y abre siempre uno nuevo de los demás. `OfflineTaskCache` conserva en SharedPreferences la última lista de tareas descargada para reabrirla sin red. Las fotos quedan en `filesDir/photos/`.
+- **Persistencia local:** `TableroDraftStore` (SharedPreferences `"aring_tableros"`, clave `draft_{tecnicoId}_{tareaId}_{tipo}_{inspectionId}`) guarda cada cambio del formulario. La clave por inspección permite mantener tableros realizados por separado y reabrir uno para corregirlo antes de finalizar la tarea. `OfflineTaskCache` conserva en SharedPreferences la última lista de tareas descargada para reabrirla sin red. Las fotos quedan en `filesDir/photos/`.
+- **Revisión antes del cierre:** los tableros completados se guardan localmente y aparecen en "Revisar tableros guardados"; se pueden abrir y editar antes de cerrar la tarea. Los borradores incompletos se agrupan bajo "Mostrar borradores incompletos". Al cerrar, la app prepara los informes del outbox y solicita la finalización; los pendientes/rechazados impiden marcar la tarea como finalizada hasta que corresponda. El informe se genera con los datos corregidos al cierre.
+- **Observaciones C/R:** en cada ítem del checklist, al elegir C/R se exige la foto y se habilita una observación asociada a esa evidencia. El texto se conserva en el borrador y se agrega al final de las observaciones de la fase 6 y del informe, identificado con el ítem correspondiente.
+- **Controles de fotografías:** tras capturar una imagen, la UI usa iconos ampliados para ver, retomar, dibujar y eliminar; se quitaron las etiquetas "Ver foto" y "Retomar foto". Eliminar quita la ruta y reinicia la validación/evidencia del campo.
 - **Aviso de sincronización (2026-10-31, ajuste final):** el mensaje "La sincronización está pendiente · se enviará al recuperar conexión" **se eliminó de la lista de tareas** (ni banner superior ni línea por tarjeta): el estado de cada tarea ya lo muestra el chip de estado y la desaparición del pendiente es automática al reconectar (`NetworkCallback` + observador `LiveData` del worker `aring-offline-sync`). Además, los informes que el servidor rechaza por validación (**4xx definitivo**, p. ej. ubicación/nivel/descripción obligatorias) **ya no se reintentan para siempre**: el worker los archiva en el outbox como `rejected-{clientOperationId}.json` (se conservan en el dispositivo para revisión), marca el último error y permite que el resto de la cola y el `finish-` sincronicen normalmente.
 - **Outbox/sincronización:** `OfflineSync` guarda cada informe JSON completo (incluidas fotos Base64) en archivos atómicos bajo `filesDir/offline-outbox/`, y un marcador `finish-{tareaId}.json` para finalizar después. WorkManager (`NetworkType.CONNECTED`) sube informes antes de pedir al backend marcar la tarea finalizada; usa reintentos y la clave `clientOperationId` UUID para que un envío repetido no duplique tableros. La cola se retoma al abrir la app y cada informe/tarea queda persistido hasta recibir confirmación del servidor.
 - **Reactividad de conexión (2026-10-31):** `MainScreenTecnico` registra un `ConnectivityManager.NetworkCallback` (al volver la conexión re-programa el outbox y refresca `cargarTecnico`) y observa con `LiveData` el estado del trabajo único `aring-offline-sync` (`WorkManager`): al terminar con éxito la UI se actualiza sola — el aviso rojo de sincronización desaparece sin tocar nada y la tarea local pasa de "En proceso" a "Finalizada".
 - **Iniciado offline (`start-{tareaId}.json`):** `OfflineSync.guardarInicio` encola el inicio con invitados cuando falla el POST por red. `IngresarTareaScreen` detecta el fallo de conexión (`ApiException.codigo == null`), marca la tarea local como "En proceso" pendiente de sincronizar y permite continuar con los tableros sin conexión. El worker procesa los archivos en orden **start → report → finish**, de modo que las notificaciones `INVITACION` se generan al reconectar. Con esto, el backend `/tareas/{id}/iniciar` es ahora idempotente: si la tarea ya está EN_PROCESO responde 200 con la tarea sin duplicar notificaciones (requiere re-deploy del backend).
-- **Refresco periódico (Fase 3):** `RefrescoTecnicoWorker` (único periódico `aring-refresco-tecnico`, 15 min, `CONNECTED`, programado en `MainActivity`) re-lee tareas, técnicos y notificaciones del técnico en segundo plano, para que la invitación aparezca sin abrir/refrescar manualmente la app (tiempo real exacto requeriría FCM/push, no implementado).
+- **Refresco periódico:** `RefrescoTecnicoWorker` (`aring-refresco-tecnico`, 15 min, `CONNECTED`) y la sincronización por conectividad mantienen actualizadas tareas e información del técnico en segundo plano. No hay botón de refresco ni campana en el navbar móvil; se mantiene la sincronización automática y la cola offline.
 - **Autenticación de la cola:** guarda RUT y contraseña por técnico en preferencias privadas `aring_outbox_auth` mientras tenga envíos pendientes, para que la sincronización siga funcionando tras cerrar sesión. Al terminar su cola, borra esas credenciales. Al actualizar desde una versión previa intenta asociar el outbox existente con la sesión de técnico guardada. La pantalla permite cerrar sesión con cola pendiente; los informes siguen en espera.
 - **Envío del informe:** `EnviarInformeScreen` construye el JSON con `TableroRepository` (fotos Base64, JPEG q85 máx. 1280px vía `decodeSampledBitmap`) y lo pone en la cola local. La pantalla confirma que quedó guardado en el dispositivo; WorkManager realiza el POST cuando hay red. La cuenta local de tableros se incrementa para permitir finalizar aunque el worker ya haya subido el informe y retirado el archivo de la cola.
+- **Galería termográfica del Word:** `DocumentoService` reconoce las variables de termografía monofásica (`mono_termografia`) y trifásica (`tri_termografia`, `tri_temp`, etiqueta "Temperatura"). Así se incluyen en la sección de evidencias termográficas las fotos de las mediciones de cada tablero de la tarea. Requiere reconstruir/desplegar backend y regenerar el documento para ver el cambio.
 - **Finalizar tarea** (cabecera, en `TableroSeleccion`): valida que haya al menos un tablero conocido (servidor o registrado localmente), guarda el marcador de finalización y muestra `TableroConfirmacion` indicando pendiente. Hasta que el backend confirme, la tarea local se muestra como finalizada con sincronización pendiente; no se debe interpretar ese estado local como confirmado por el servidor.
-- **Errores de sincronización:** `OfflineSync` conserva el último mensaje de error del servidor. El técnico puede reintentar desde la actualización de la barra superior o al abrir la app. La UI de técnico no descarga informes; solo el panel web usa las rutas de documentos. El listado del administrador cambia cuando la petición de finalización llega al backend.
+- **Errores de sincronización:** `OfflineSync` conserva el último mensaje de error del servidor. El worker reintenta al recuperar conexión y la app vuelve a programar la cola al abrirse. No hay control manual de actualización en el navbar. La UI de técnico no descarga informes; solo el panel web usa las rutas de documentos.
 
 ### Cámara y anotación de evidencia
 - `PhotoBus` (singleton con `MutableStateFlow`) para comunicación pantalla↔cámara: `PhotoRequest(phased, category PREVIOUS|MEASUREMENT|CHECKLIST|POST, referenceId?, slotIndex, label)`.
@@ -337,7 +341,7 @@ App.kt
 - `DetalleTareaTecnico`: tarjeta datos + **"Ir a la dirección"** (intento `geo:0,0?q=dirección` con funcionalidad de maps) + "Ingresar/Retomar tarea".
 - `IngresarTareaScreen` (cabecera): si ya en proceso muestra fecha inicio + "Retomarás la tarea desde el último punto guardado."; si no, selector de hasta **5 invitados** ("Invitaciones: N/5") → `Iniciar tarea`.
 - El rol técnico ya no tiene pestañas Inicio ni Documentos, ni función móvil para descargar documentos. La descarga de informes continúa disponible en el panel web del administrador; el endpoint del backend sigue perteneciendo a esa funcionalidad.
-- La pantalla Tareas muestra los cierres locales todavía pendientes de sincronizar. `OfflineSync` guarda el último error; el técnico puede pedir un reintento con el botón de actualización de la barra superior o al abrir la aplicación. Al quitar la pantalla Documentos, el error ya no se muestra en un banner dedicado.
+- La pantalla Tareas refleja la sincronización local pendiente. `OfflineSync` conserva el último error y reintenta mediante WorkManager al recuperar conexión o al abrir la app; no existe botón de actualización manual. El error no se muestra en un banner dedicado.
 
 ### UI kit propio en Compose (`ui/components/Componentes.kt`)
 `LogoRayo`, `IconoOjo`, `Avatar`, `ChipEstado` (rojo/amarillo/verde), `ChipTipo`, `ChipLegenda`, `Tarjeta`, `BannerError/BannerOk`, `Cargando`, `Vacio`, `BtnPrimario/BtnSecundario/BtnRiesgo`, `ModalDialog`, `ConfirmarDialog`, `SeccionFormulario`, `CampoTexto` (BasicTextField custom con ojo/halo), `CampoSelect` (DropdownMenu medido), `HorizontalSeparador`. Tema `ARIngMovilTheme` light-only con colorscheme primario violeta.
@@ -351,10 +355,10 @@ Idénticos al web (`Violeta #6C3CE9`, `VioletaOscuro #4B2495`, gradiente, status
 
 | Actor | Ve | Crea (backend) |
 |---|---|---|
-| Panel web y administrador Android | `TAREA_FINALIZADA` (badge de pendientes) | al finalizar una tarea |
-| Técnico en Android | `TAREA_INICIADA` e `INVITACION` propias | al iniciar tarea con invitados |
+| Panel web | `TAREA_FINALIZADA` (badge de pendientes) | al finalizar una tarea |
+| Técnico en Android | Ya no muestra campana ni consume notificaciones en la UI móvil | los eventos de inicio/invitación aún se producen en backend |
 
-El estado `leida` se persiste en backend. Al desplegar la lista de notificaciones, las aplicaciones marcan como leídas las pendientes; el badge vuelve a aparecer cuando llega una nueva notificación sin leer. Aplica al administrador web, administrador móvil y técnico móvil.
+La gestión de notificaciones sigue disponible en el panel web y en backend. La aplicación Android dejó de descargar, mostrar y marcar notificaciones como leídas; se retiró su hoja, estado/repositorio móvil y la campana del navbar. También se quitó el control manual de actualización. La sincronización técnica automática en segundo plano se mantiene.
 
 ---
 
