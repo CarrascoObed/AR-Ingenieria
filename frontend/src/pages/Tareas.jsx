@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Pencil, Plus, Trash2, Wrench } from 'lucide-react';
+import { Pencil, Plus, Trash2, Wrench } from 'lucide-react';
 import { api, mensajeError } from '../api/client';
 import {
   Cargando,
@@ -64,7 +64,17 @@ export default function Tareas() {
   const [confirmarAbierto, setConfirmarAbierto] = useState(false);
   const [confirmarLimpiar, setConfirmarLimpiar] = useState(false);
 
-  const cargar = async () => {
+  const cargar = async (silencioso = false) => {
+    if (silencioso) {
+      try {
+        const res = await api.get('/tareas');
+        const ocultas = leerOcultas();
+        setTareas(res.data.filter((t) => !ocultas.has(t.id)));
+      } catch {
+        // Si falla una actualización en segundo plano, conserva los datos visibles.
+      }
+      return;
+    }
     setCargando(true);
     setError('');
     try {
@@ -90,6 +100,8 @@ export default function Tareas() {
 
   useEffect(() => {
     cargar();
+    const intervalo = window.setInterval(() => cargar(true), 60_000);
+    return () => window.clearInterval(intervalo);
   }, []);
 
   const formCompleto =
@@ -167,18 +179,6 @@ export default function Tareas() {
     } catch (err) {
       setError(mensajeError(err));
       setConfirmarAbierto(false);
-    }
-  };
-
-  const cambiarEstado = async (tarea, nuevoEstado) => {
-    setError('');
-    try {
-      await api.put(`/tareas/${tarea.id}/estado`, { estado: nuevoEstado });
-      setAviso(`La tarea ${tarea.codigo} fue finalizada. Se envió una notificación.`);
-      cargar();
-      setTimeout(() => setAviso(''), 5000);
-    } catch (err) {
-      setError(mensajeError(err));
     }
   };
 
@@ -265,9 +265,8 @@ export default function Tareas() {
               <span className="franja-tarea-direccion">{t.direccion}</span>
               <span className="franja-tarea-estado"><ChipEstado estado={t.estado} /></span>
 
-              {(t.estado === 'No iniciada' || t.estado === 'En proceso') && (
+              {t.estado === 'No iniciada' && (
                 <div className="tarjeta-tarea-acciones franja-acciones">
-                  {t.estado === 'No iniciada' && (
                   <>
                     <button className="btn btn-chico btn-secundario" onClick={() => abrirEditar(t)}>
                       <Pencil size={15} />
@@ -284,16 +283,6 @@ export default function Tareas() {
                       Eliminar
                     </button>
                   </>
-                  )}
-                  {t.estado === 'En proceso' && (
-                  <button
-                    className="btn btn-chico btn-primario"
-                    onClick={() => cambiarEstado(t, 'FINALIZADA')}
-                  >
-                    <Check size={15} />
-                    Finalizar (demo)
-                  </button>
-                  )}
                 </div>
               )}
             </div>
