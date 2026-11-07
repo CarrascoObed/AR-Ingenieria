@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, FileSpreadsheet, FileText, History } from 'lucide-react';
+import { Download, FileSpreadsheet, FileText, History, Search, X } from 'lucide-react';
 import { api, mensajeErrorBlob } from '../api/client';
 
 function FiltrosFechas({ filtro, setFiltro }) {
@@ -49,11 +49,15 @@ export default function Documentos() {
   });
   const [busquedaEdificio, setBusquedaEdificio] = useState('');
   const [edificioSeleccionado, setEdificioSeleccionado] = useState('');
+  const [filtrosInformes, setFiltrosInformes] = useState({
+    nombreTecnico: '', direccion: '', fechaDesde: '', fechaHasta: '',
+  });
   const [sugerencias, setSugerencias] = useState([]);
   const [cargandoSugerencias, setCargandoSugerencias] = useState(false);
   const [tareasEdificio, setTareasEdificio] = useState([]);
   const [tareaSeleccionada, setTareaSeleccionada] = useState(null);
   const [cargandoTareas, setCargandoTareas] = useState(false);
+  const [busquedaRealizada, setBusquedaRealizada] = useState(false);
   const [error, setError] = useState('');
   const [descargando, setDescargando] = useState('');
 
@@ -84,26 +88,57 @@ export default function Documentos() {
     };
   }, [busquedaEdificio, edificioSeleccionado]);
 
-  const seleccionarEdificio = async (nombre) => {
+  const seleccionarEdificio = (nombre) => {
     const seleccionado = nombre.trim();
     if (!seleccionado) return;
     setBusquedaEdificio(seleccionado);
     setEdificioSeleccionado(seleccionado);
     setSugerencias([]);
+  };
+
+  const buscarInformes = async (e) => {
+    e?.preventDefault();
+    const filtros = {
+      nombreRecinto: busquedaEdificio.trim(),
+      direccion: filtrosInformes.direccion.trim(),
+      nombreTecnico: filtrosInformes.nombreTecnico.trim(),
+      fechaDesde: filtrosInformes.fechaDesde,
+      fechaHasta: filtrosInformes.fechaHasta,
+    };
+    if (!Object.values(filtros).some(Boolean)) {
+      setError('Ingresa al menos un filtro para buscar informes.');
+      return;
+    }
+    if (filtros.fechaDesde && filtros.fechaHasta && filtros.fechaDesde > filtros.fechaHasta) {
+      setError('La fecha desde no puede ser posterior a la fecha hasta.');
+      return;
+    }
     setTareasEdificio([]);
     setTareaSeleccionada(null);
     setError('');
+    setBusquedaRealizada(true);
     setCargandoTareas(true);
     try {
       const res = await api.get('/documentos/edificios/tareas', {
-        params: { nombre: seleccionado },
+        params: filtros,
       });
       setTareasEdificio(res.data);
     } catch (err) {
-      setError(err?.response?.data?.mensaje || 'No se pudieron cargar los mantenimientos.');
+      setError(err?.response?.data?.mensaje || 'No se pudieron buscar los informes.');
     } finally {
       setCargandoTareas(false);
     }
+  };
+
+  const limpiarFiltrosInformes = () => {
+    setBusquedaEdificio('');
+    setEdificioSeleccionado('');
+    setFiltrosInformes({ nombreTecnico: '', direccion: '', fechaDesde: '', fechaHasta: '' });
+    setTareasEdificio([]);
+    setTareaSeleccionada(null);
+    setBusquedaRealizada(false);
+    setSugerencias([]);
+    setError('');
   };
 
   const descargar = async (ruta, nombreArchivo, params = {}) => {
@@ -195,10 +230,11 @@ export default function Documentos() {
           tareas finalizadas
         </h3>
         <p className="descripcion">
-          Busca un edificio, selecciona el mantenimiento que necesitas y descarga su informe en
-          Excel o Word.
+          Filtra por edificio, técnico, dirección o fecha de finalización. Puedes combinar varios
+          criterios y luego elegir el informe que necesitas.
         </p>
-        <div className="fila">
+        <form onSubmit={buscarInformes}>
+          <div className="fila">
           <div className="campo-sugerencias campo-busqueda-edificio">
             <div className="campo">
               <label htmlFor="buscar-edificio">Nombre del edificio</label>
@@ -210,15 +246,10 @@ export default function Documentos() {
                   setEdificioSeleccionado('');
                   setTareasEdificio([]);
                   setTareaSeleccionada(null);
+                  setBusquedaRealizada(false);
                   setError('');
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    seleccionarEdificio(busquedaEdificio);
-                  }
-                  if (e.key === 'Escape') setSugerencias([]);
-                }}
+                onKeyDown={(e) => e.key === 'Escape' && setSugerencias([])}
                 placeholder="Ej: Edificio Vicuña Urban"
                 autoComplete="off"
                 aria-autocomplete="list"
@@ -240,41 +271,75 @@ export default function Documentos() {
                       onClick={() => seleccionarEdificio(nombre)}
                     >
                       <strong>{nombre}</strong>
-                      <span>Ver mantenimientos finalizados</span>
+                      <span>Usar como filtro</span>
                     </button>
                   ))
                 ) : (
                   <div className="sugerencias-vacias">
-                    No hay sugerencias. Presiona Enter para buscar este nombre.
+                    No hay sugerencias para este nombre.
                   </div>
                 )}
               </div>
             )}
           </div>
-        </div>
+          <div className="campo">
+            <label htmlFor="buscar-tecnico-informe">Nombre del técnico</label>
+            <input
+              id="buscar-tecnico-informe"
+              value={filtrosInformes.nombreTecnico}
+              onChange={(e) => setFiltrosInformes((f) => ({ ...f, nombreTecnico: e.target.value }))}
+              placeholder="Nombre o apellido"
+            />
+          </div>
+          <div className="campo">
+            <label htmlFor="buscar-direccion-informe">Dirección</label>
+            <input
+              id="buscar-direccion-informe"
+              value={filtrosInformes.direccion}
+              onChange={(e) => setFiltrosInformes((f) => ({ ...f, direccion: e.target.value }))}
+              placeholder="Calle, número o comuna"
+            />
+          </div>
+          <div className="campo">
+            <label htmlFor="fecha-desde-informe">Fecha desde</label>
+            <input
+              id="fecha-desde-informe"
+              type="date"
+              value={filtrosInformes.fechaDesde}
+              onChange={(e) => setFiltrosInformes((f) => ({ ...f, fechaDesde: e.target.value }))}
+            />
+          </div>
+          <div className="campo">
+            <label htmlFor="fecha-hasta-informe">Fecha hasta</label>
+            <input
+              id="fecha-hasta-informe"
+              type="date"
+              value={filtrosInformes.fechaHasta}
+              onChange={(e) => setFiltrosInformes((f) => ({ ...f, fechaHasta: e.target.value }))}
+            />
+          </div>
+          </div>
+          <div className="fila-descarga">
+            <button className="btn btn-primario" type="submit" disabled={cargandoTareas}>
+              <Search size={18} />
+              {cargandoTareas ? 'Buscando…' : 'Buscar informes'}
+            </button>
+            <button className="btn btn-secundario" type="button" onClick={limpiarFiltrosInformes}>
+              <X size={18} /> Limpiar filtros
+            </button>
+          </div>
+        </form>
 
-        {edificioSeleccionado && (
+        {busquedaRealizada && (
           <div className="resultado-edificio">
             <div className="resultado-edificio-cabecera">
-              <strong>{edificioSeleccionado}</strong>
-              <button
-                className="btn btn-secundario btn-chico"
-                type="button"
-                onClick={() => {
-                  setEdificioSeleccionado('');
-                  setBusquedaEdificio('');
-                  setTareasEdificio([]);
-                  setTareaSeleccionada(null);
-                }}
-              >
-                Cambiar edificio
-              </button>
+              <strong>{tareasEdificio.length} informe(s) encontrado(s)</strong>
             </div>
             {cargandoTareas ? (
               <p className="descripcion">Cargando mantenimientos…</p>
             ) : tareasEdificio.length ? (
               <>
-                <p className="descripcion">Selecciona un mantenimiento para descargar sus archivos.</p>
+                <p className="descripcion">Selecciona una tarea para habilitar sus descargas.</p>
                 <div className="lista-mantenimientos" role="radiogroup" aria-label="Mantenimientos del edificio">
                   {tareasEdificio.map((tarea) => (
                     <label
@@ -291,6 +356,7 @@ export default function Documentos() {
                       <span className="mantenimiento-detalle">
                         <strong>{tarea.nombreRecinto}</strong>
                         <span>{tarea.direccion}</span>
+                        <span>Técnico: {tarea.nombreTecnico || 'Sin técnico asignado'}</span>
                         <span>{fechaTarea(tarea.fecha)} · ID {tarea.codigo}</span>
                       </span>
                     </label>
@@ -298,7 +364,7 @@ export default function Documentos() {
                 </div>
               </>
             ) : (
-              <p className="descripcion">No hay mantenimientos finalizados con informes para este edificio.</p>
+              <p className="descripcion">No se encontraron informes con los filtros seleccionados.</p>
             )}
           </div>
         )}

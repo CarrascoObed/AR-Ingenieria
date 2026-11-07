@@ -44,8 +44,14 @@ public class DocumentoController {
     }
 
     @GetMapping("/edificios/tareas")
-    public List<DocumentoService.TareaInforme> tareasDeEdificio(@RequestParam("nombre") String nombreRecinto) {
-        return documentoService.tareasFinalizadasDeEdificio(nombreRecinto);
+    public List<DocumentoService.TareaInforme> tareasDeEdificio(
+            @RequestParam(required = false) String nombreRecinto,
+            @RequestParam(required = false) String direccion,
+            @RequestParam(required = false) String nombreTecnico,
+            @RequestParam(required = false) String fechaDesde,
+            @RequestParam(required = false) String fechaHasta) {
+        return documentoService.buscarTareasFinalizadasParaInforme(nombreRecinto, direccion, nombreTecnico,
+                inicioDelDia(fechaDesde), finDelDia(fechaHasta));
     }
 
     @GetMapping("/historial.xlsx")

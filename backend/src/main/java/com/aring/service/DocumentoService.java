@@ -408,7 +408,8 @@ public class DocumentoService {
                 .orElse(null);
     }
 
-    public record TareaInforme(Long id, String codigo, String nombreRecinto, String direccion, Instant fecha) {
+    public record TareaInforme(Long id, String codigo, String nombreRecinto, String direccion,
+                               String nombreTecnico, Instant fecha) {
     }
 
     @Transactional(readOnly = true)
@@ -420,16 +421,26 @@ public class DocumentoService {
     }
 
     @Transactional(readOnly = true)
-    public List<TareaInforme> tareasFinalizadasDeEdificio(String nombreRecinto) {
-        if (nombreRecinto == null || nombreRecinto.isBlank()) {
+    public List<TareaInforme> buscarTareasFinalizadasParaInforme(String nombreRecinto, String direccion,
+                                                                  String nombreTecnico, Instant fechaDesde,
+                                                                  Instant fechaHasta) {
+        if ((nombreRecinto == null || nombreRecinto.isBlank())
+                && (direccion == null || direccion.isBlank())
+                && (nombreTecnico == null || nombreTecnico.isBlank())
+                && fechaDesde == null && fechaHasta == null) {
             return List.of();
         }
-        return tareaRepository.listarFinalizadasConInformesDeEdificio(nombreRecinto.trim()).stream()
+        Specification<Tarea> spec = TareaSpecifications.documentosFinalizados(
+                nombreRecinto, direccion, nombreTecnico, fechaDesde, fechaHasta);
+        return tareaRepository.findAll(spec, Sort.by(Sort.Direction.DESC, "fechaFin")).stream()
                 .map(tarea -> new TareaInforme(
                         tarea.getId(),
                         tarea.getCodigo(),
                         tarea.getNombreRecinto(),
                         tarea.getDireccion(),
+                        tarea.getTecnicoCabecera() == null ? "Sin técnico asignado"
+                                : tarea.getTecnicoCabecera().getNombre() + " "
+                                        + tarea.getTecnicoCabecera().getApellido(),
                         tarea.getFechaFin() != null ? tarea.getFechaFin()
                                 : tarea.getFechaInicio() != null ? tarea.getFechaInicio() : tarea.getFechaCreacion()))
                 .toList();
