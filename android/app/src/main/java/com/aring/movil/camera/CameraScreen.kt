@@ -3,6 +3,8 @@ package com.aring.movil.camera
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
+import java.io.FileOutputStream
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -44,6 +46,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +59,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.aring.movil.ui.panel.common.PrimaryButton
 import com.aring.movil.ui.theme.RojoError
 import com.aring.movil.ui.theme.Violeta
@@ -78,6 +84,41 @@ fun CameraScreen(onDone: () -> Unit) {
     var captureError by remember { mutableStateOf<String?>(null) }
     var flashOn by remember { mutableStateOf(false) }
     var capturing by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            capturing = true
+            captureError = null
+            coroutineScope.launch {
+                val importedFile = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val file = PhotoStorage.newPhotoFile(context)
+                        try {
+                            val input = context.contentResolver.openInputStream(uri)
+                                ?: error("No se pudo leer la imagen seleccionada")
+                            input.use { source ->
+                                FileOutputStream(file).use { destination -> source.copyTo(destination) }
+                            }
+                            file
+                        } catch (error: Exception) {
+                            file.delete()
+                            throw error
+                        }
+                    }.getOrNull()
+                }
+                capturing = false
+                if (importedFile != null) {
+                    PhotoBus.deliverResult(importedFile.absolutePath)
+                    onDone()
+                } else {
+                    captureError = "No se pudo cargar la fotografía seleccionada"
+                }
+            }
+        }
+    }
 
     val previewView = remember { PreviewView(context) }
     val imageCaptureRef = remember { arrayOfNulls<ImageCapture>(1) }
@@ -222,6 +263,10 @@ fun CameraScreen(onDone: () -> Unit) {
                         permissionLauncher.launch(Manifest.permission.CAMERA)
                     }
                     Spacer(Modifier.size(8.dp))
+                    TextButton(onClick = { galleryLauncher.launch("image/*") }) {
+                        Text("Elegir de galería", color = Color.White)
+                    }
+                    Spacer(Modifier.size(8.dp))
                     TextButton(onClick = onDone) {
                         Text("Cancelar", color = Color.White)
                     }
@@ -238,8 +283,11 @@ fun CameraScreen(onDone: () -> Unit) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(onClick = onDone) {
-                        Text("Cancelar", color = Color.White)
+                    TextButton(
+                        onClick = { galleryLauncher.launch("image/*") },
+                        enabled = !capturing
+                    ) {
+                        Text("Galería", color = Color.White)
                     }
                     Box(
                         modifier = Modifier
