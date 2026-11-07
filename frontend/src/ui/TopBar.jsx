@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Bell, LogOut, Trash2, ArrowLeftRight } from 'lucide-react';
+import { Bell, LogOut, Trash2, ArrowLeftRight, Clock3 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { api, mensajeError } from '../api/client';
 import { Avatar, Confirmar } from './Componentes';
@@ -13,7 +13,9 @@ export default function TopBar() {
   const [notificaciones, setNotificaciones] = useState([]);
   const [notifAbierto, setNotifAbierto] = useState(false);
   const [confirmarSalida, setConfirmarSalida] = useState(false);
+  const [segundosRestantes, setSegundosRestantes] = useState(60);
   const notifRef = useRef(null);
+  const cuentaRegresivaRef = useRef(60);
 
   const noLeidas = notificaciones.filter((n) => !n.leida).length;
 
@@ -28,6 +30,21 @@ export default function TopBar() {
 
   useEffect(() => {
     cargarNotificaciones();
+  }, []);
+
+  useEffect(() => {
+    const intervalo = window.setInterval(() => {
+      cuentaRegresivaRef.current -= 1;
+      if (cuentaRegresivaRef.current <= 0) {
+        cuentaRegresivaRef.current = 60;
+        setSegundosRestantes(60);
+        window.dispatchEvent(new Event('aring:refresh-data'));
+        cargarNotificaciones();
+      } else {
+        setSegundosRestantes(cuentaRegresivaRef.current);
+      }
+    }, 1000);
+    return () => window.clearInterval(intervalo);
   }, []);
 
   useEffect(() => {
@@ -118,6 +135,12 @@ export default function TopBar() {
             Salir del modo administrador
           </button>
         )}
+
+        <div className="topbar-actualizacion" role="status" title="Actualiza los datos desde el servidor">
+          <Clock3 size={15} />
+          <span>Actualiza en</span>
+          <strong>{segundosRestantes}s</strong>
+        </div>
 
         <div className="notif-wrap" ref={notifRef}>
           <button

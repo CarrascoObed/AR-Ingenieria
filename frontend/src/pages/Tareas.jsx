@@ -100,8 +100,12 @@ export default function Tareas() {
 
   useEffect(() => {
     cargar();
-    const intervalo = window.setInterval(() => cargar(true), 60_000);
-    return () => window.clearInterval(intervalo);
+  }, []);
+
+  useEffect(() => {
+    const actualizarDesdeServidor = () => cargar(true);
+    window.addEventListener('aring:refresh-data', actualizarDesdeServidor);
+    return () => window.removeEventListener('aring:refresh-data', actualizarDesdeServidor);
   }, []);
 
   const formCompleto =
