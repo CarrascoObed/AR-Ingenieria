@@ -1,4 +1,4 @@
-import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext';
 import { PantallasProvider, usePantallas } from './ui/PantallasContext';
 import TopBar from './ui/TopBar';
@@ -13,12 +13,15 @@ import SuperInicio from './pages/SuperInicio';
 import SuperPanel from './pages/SuperPanel';
 
 function Layout({ base = '/', mostrarMenu = true }) {
+  const location = useLocation();
+  const contenidoAmplio = /\/(clientes|tecnicos|tareas)$/.test(location.pathname);
+
   return (
     <>
       <TopBar />
       <div className="layout">
         {mostrarMenu && <Sidebar base={base} />}
-        <main className="contenido">
+        <main className={`contenido${contenidoAmplio ? ' contenido-ancho' : ''}`}>
           <Outlet />
         </main>
       </div>

@@ -71,6 +71,10 @@ input, select, textarea {
   width: 100%;
 }
 
+.contenido-ancho {
+  max-width: none;
+}
+
 .titulo-pagina {
   font-size: 26px;
   font-weight: 800;
@@ -900,6 +904,153 @@ input, select, textarea {
   border-top: 1px solid var(--fondo-gris);
   padding-top: 14px;
   margin-top: 14px;
+}
+
+/* Listas compactas de técnicos, tareas y clientes */
+.lista-franjas {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.franja-entidad {
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  min-height: 72px;
+  padding: 12px 16px;
+  border-radius: 12px;
+}
+
+.franja-entidad .tarjeta-tecnico-cabecera {
+  flex: 1;
+  min-width: 0;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+
+.franja-entidad .tarjeta-tecnico-cabecera .datos {
+  min-width: 0;
+}
+
+.franja-entidad .tarjeta-tecnico-cabecera .datos h3,
+.franja-entidad .tarjeta-tecnico-cabecera .datos p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.franja-entidad .tarjeta-tecnico-acciones {
+  flex-shrink: 0;
+  justify-content: flex-end;
+  border-top: 0;
+  padding-top: 0;
+}
+
+.franja-secundaria {
+  color: var(--texto-gris);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.franja-tarea {
+  display: grid;
+  grid-template-columns: minmax(88px, auto) minmax(150px, 0.85fr) minmax(220px, 1.7fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 18px;
+  border-radius: 12px;
+}
+
+.franja-tarea .franja-tarea-id,
+.franja-tarea .franja-tarea-cliente,
+.franja-tarea .franja-tarea-direccion,
+.franja-tarea .franja-tarea-estado {
+  min-width: 0;
+}
+
+.franja-tarea .franja-tarea-id {
+  white-space: nowrap;
+}
+
+.franja-tarea .franja-tarea-cliente {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.franja-tarea .franja-tarea-direccion {
+  overflow: hidden;
+  color: var(--texto-gris);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.franja-tarea .franja-tarea-estado {
+  justify-self: start;
+}
+
+.franja-tarea .franja-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+@media (max-width: 900px) {
+  .franja-tarea {
+    grid-template-columns: minmax(85px, auto) minmax(0, 1fr) auto;
+    grid-template-areas:
+      'id cliente estado'
+      'direccion direccion direccion'
+      'acciones acciones acciones';
+    gap: 8px 12px;
+  }
+
+  .franja-tarea .franja-tarea-id {
+    grid-area: id;
+  }
+
+  .franja-tarea .franja-tarea-cliente {
+    grid-area: cliente;
+  }
+
+  .franja-tarea .franja-tarea-direccion {
+    grid-area: direccion;
+  }
+
+  .franja-tarea .franja-tarea-estado {
+    grid-area: estado;
+  }
+
+  .franja-tarea .franja-acciones {
+    grid-area: acciones;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .franja-entidad {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .franja-entidad .tarjeta-tecnico-cabecera {
+    flex-basis: calc(100% - 110px);
+  }
+
+  .franja-entidad .franja-secundaria {
+    order: 3;
+    flex-basis: 100%;
+    padding-left: 52px;
+  }
 }
 
 /* ---------- Dashboard ---------- */

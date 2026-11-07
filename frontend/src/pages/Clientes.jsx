@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Building2, ImagePlus, Pencil, Trash2, X } from 'lucide-react';
 import { api, mensajeError } from '../api/client';
-import { useRefresh } from '../ui/RefreshContext';
 import {
   Cargando,
   Confirmar,
@@ -55,8 +54,6 @@ function archivoABase64(archivo) {
 }
 
 export default function Clientes() {
-  const { key } = useRefresh();
-
   const [clientes, setClientes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -92,7 +89,7 @@ export default function Clientes() {
 
   useEffect(() => {
     cargar();
-  }, [key]);
+  }, []);
 
   const actualizar = (campo) => (e) => setForm((f) => ({ ...f, [campo]: e.target.value }));
 
@@ -287,11 +284,11 @@ export default function Clientes() {
       ) : clientes.length === 0 ? (
         <Vacio mensaje="Aún no hay clientes registrados." />
       ) : (
-        <div className="grid-tecnicos">
+        <div className="lista-franjas">
           {clientes.map((c) => {
             const uri = uriImagen(c);
             return (
-              <div key={c.id} className="tarjeta-tecnico">
+              <div key={c.id} className="tarjeta-tecnico franja-entidad">
                 <div className="tarjeta-tecnico-cabecera">
                   {uri ? (
                     <img className="imagen-cliente" src={uri} alt={`Imagen de ${c.nombreRecinto}`} />

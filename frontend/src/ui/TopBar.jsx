@@ -1,20 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Bell, LogOut, RefreshCw, Trash2, ArrowLeftRight } from 'lucide-react';
+import { Bell, LogOut, Trash2, ArrowLeftRight } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { useRefresh } from './RefreshContext';
 import { api, mensajeError } from '../api/client';
 import { Avatar, Confirmar } from './Componentes';
 
 export default function TopBar() {
   const { admin, logout } = useAuth();
-  const { key, trigger } = useRefresh();
   const navigate = useNavigate();
   const location = useLocation();
 
   const [notificaciones, setNotificaciones] = useState([]);
   const [notifAbierto, setNotifAbierto] = useState(false);
-  const [refrescando, setRefrescando] = useState(false);
   const [confirmarSalida, setConfirmarSalida] = useState(false);
   const notifRef = useRef(null);
 
@@ -31,7 +28,7 @@ export default function TopBar() {
 
   useEffect(() => {
     cargarNotificaciones();
-  }, [key]);
+  }, []);
 
   useEffect(() => {
     const cerrar = (e) => {
@@ -42,13 +39,6 @@ export default function TopBar() {
     document.addEventListener('mousedown', cerrar);
     return () => document.removeEventListener('mousedown', cerrar);
   }, []);
-
-  const onActualizar = async () => {
-    setRefrescando(true);
-    trigger();
-    await cargarNotificaciones();
-    setTimeout(() => setRefrescando(false), 600);
-  };
 
   const marcarLeida = async (id) => {
     try {
@@ -128,15 +118,6 @@ export default function TopBar() {
             Salir del modo administrador
           </button>
         )}
-
-        <button
-          className="topbar-icono"
-          title="Actualizar información"
-          onClick={onActualizar}
-          aria-label="Actualizar"
-        >
-          <RefreshCw size={20} className={refrescando ? 'rotando' : ''} />
-        </button>
 
         <div className="notif-wrap" ref={notifRef}>
           <button

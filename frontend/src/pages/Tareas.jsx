@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Check, Pencil, Plus, Trash2, Wrench } from 'lucide-react';
 import { api, mensajeError } from '../api/client';
-import { useRefresh } from '../ui/RefreshContext';
 import {
-  Avatar,
   Cargando,
   ChipEstado,
   Confirmar,
@@ -45,8 +43,6 @@ function normalizar(texto) {
 }
 
 export default function Tareas() {
-  const { key } = useRefresh();
-
   const [tareas, setTareas] = useState([]);
   const [tecnicos, setTecnicos] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -94,7 +90,7 @@ export default function Tareas() {
 
   useEffect(() => {
     cargar();
-  }, [key]);
+  }, []);
 
   const formCompleto =
     form.tipo === 'MANTENIMIENTO' &&
@@ -263,38 +259,15 @@ export default function Tareas() {
       ) : (
         <div className="lista-tareas">
           {tareas.map((t) => (
-            <div key={t.id} className="tarjeta-tarea">
-              <div className="tarjeta-tarea-cabecera">
-                <span className="codigo">{t.codigo}</span>
-                <span className="chip chip-azul">{t.tipo}</span>
-                <ChipEstado estado={t.estado} />
-              </div>
+            <div key={t.id} className="tarjeta-tarea franja-tarea">
+              <span className="codigo franja-tarea-id">{t.codigo}</span>
+              <span className="franja-tarea-cliente">{t.nombreRecinto}</span>
+              <span className="franja-tarea-direccion">{t.direccion}</span>
+              <span className="franja-tarea-estado"><ChipEstado estado={t.estado} /></span>
 
-              <div className="titulo-recinto">{t.nombreRecinto}</div>
-              <p className="detalle">{t.direccion}</p>
-              <p className="detalle">{t.descripcion}</p>
-
-              <div className="tecnico">
-                {t.tecnicoCabecera ? (
-                  <>
-                    <Avatar
-                      nombre={t.tecnicoCabecera.nombre}
-                      apellido={t.tecnicoCabecera.apellido}
-                      size={26}
-                      fontSize={11}
-                    />
-                    Técnico de cabecera:{' '}
-                    <strong>
-                      {t.tecnicoCabecera.nombre} {t.tecnicoCabecera.apellido}
-                    </strong>
-                  </>
-                ) : (
-                  <span style={{ color: 'var(--texto-gris)' }}>Sin técnico de cabecera asignado</span>
-                )}
-              </div>
-
-              <div className="tarjeta-tarea-acciones">
-                {t.estado === 'No iniciada' && (
+              {(t.estado === 'No iniciada' || t.estado === 'En proceso') && (
+                <div className="tarjeta-tarea-acciones franja-acciones">
+                  {t.estado === 'No iniciada' && (
                   <>
                     <button className="btn btn-chico btn-secundario" onClick={() => abrirEditar(t)}>
                       <Pencil size={15} />
@@ -311,8 +284,8 @@ export default function Tareas() {
                       Eliminar
                     </button>
                   </>
-                )}
-                {t.estado === 'En proceso' && (
+                  )}
+                  {t.estado === 'En proceso' && (
                   <button
                     className="btn btn-chico btn-primario"
                     onClick={() => cambiarEstado(t, 'FINALIZADA')}
@@ -320,11 +293,9 @@ export default function Tareas() {
                     <Check size={15} />
                     Finalizar (demo)
                   </button>
-                )}
-                {t.estado === 'Finalizada' && (
-                  <span className="chip chip-verde">Tarea finalizada</span>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

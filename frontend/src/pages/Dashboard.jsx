@@ -11,7 +11,6 @@ import {
 } from 'recharts';
 import { BarChart3, Users } from 'lucide-react';
 import { api, mensajeError } from '../api/client';
-import { useRefresh } from '../ui/RefreshContext';
 import { Avatar, Cargando, ErrorBanner, Vacio } from '../ui/Componentes';
 
 const COLORES = {
@@ -21,7 +20,6 @@ const COLORES = {
 };
 
 export default function Dashboard() {
-  const { key } = useRefresh();
   const [stats, setStats] = useState(null);
   const [tecnicos, setTecnicos] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -45,7 +43,7 @@ export default function Dashboard() {
       }
     };
     cargar();
-  }, [key]);
+  }, []);
 
   if (cargando) return <Cargando mensaje="Cargando dashboard…" />;
 

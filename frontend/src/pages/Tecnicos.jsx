@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pencil, Plus, Trash2, UserPlus } from 'lucide-react';
 import { api, mensajeError } from '../api/client';
-import { useRefresh } from '../ui/RefreshContext';
 import {
   Avatar,
   Cargando,
@@ -24,8 +23,6 @@ const VACIO = {
 };
 
 export default function Tecnicos() {
-  const { key } = useRefresh();
-
   const [tecnicos, setTecnicos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -57,7 +54,7 @@ export default function Tecnicos() {
 
   useEffect(() => {
     cargar();
-  }, [key]);
+  }, []);
 
   const formCompleto = Object.values(form).every((v) => v.trim() !== '');
 
@@ -160,11 +157,11 @@ export default function Tecnicos() {
       ) : tecnicos.length === 0 ? (
         <Vacio mensaje="Aún no hay técnicos creados." />
       ) : (
-        <div className="grid-tecnicos">
+        <div className="lista-franjas">
           {tecnicos.map((t) => (
-            <div key={t.id} className="tarjeta-tecnico">
+            <div key={t.id} className="tarjeta-tecnico franja-entidad">
               <div className="tarjeta-tecnico-cabecera">
-                <Avatar nombre={t.nombre} apellido={t.apellido} size={46} fontSize={18} />
+                <Avatar nombre={t.nombre} apellido={t.apellido} size={40} fontSize={16} />
                 <div className="datos">
                   <h3>
                     {t.nombre} {t.apellido}
@@ -172,6 +169,7 @@ export default function Tecnicos() {
                   <p>RUT {t.rut}</p>
                 </div>
               </div>
+              {t.contactoTelefono && <span className="franja-secundaria">Contacto: {t.contactoTelefono}</span>}
               <div className="tarjeta-tecnico-acciones">
                 <button className="btn btn-chico btn-secundario" onClick={() => abrirEditar(t)}>
                   <Pencil size={15} />
