@@ -1,11 +1,13 @@
 package com.aring.controller;
 
 import com.aring.dto.EstadoRequest;
+import com.aring.dto.ActualizarAyudantesRequest;
 import com.aring.dto.IniciarRequest;
 import com.aring.dto.TareaDto;
 import com.aring.dto.TareaRequest;
 import com.aring.dto.TareaUpdateRequest;
 import com.aring.model.Tarea;
+import com.aring.security.JwtUtil;
 import com.aring.service.TareaService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -25,9 +28,11 @@ import java.util.List;
 public class TareaController {
 
     private final TareaService tareaService;
+    private final JwtUtil jwtUtil;
 
-    public TareaController(TareaService tareaService) {
+    public TareaController(TareaService tareaService, JwtUtil jwtUtil) {
         this.tareaService = tareaService;
+        this.jwtUtil = jwtUtil;
     }
 
     @GetMapping
@@ -43,6 +48,14 @@ public class TareaController {
     @PostMapping("/{id}/iniciar")
     public TareaDto iniciar(@PathVariable Long id, @Valid @RequestBody IniciarRequest request) {
         return TareaDto.from(tareaService.iniciar(id, request));
+    }
+
+    @PutMapping("/{id}/ayudantes")
+    public TareaDto actualizarAyudantes(
+            @PathVariable Long id,
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @Valid @RequestBody ActualizarAyudantesRequest request) {
+        return TareaDto.from(tareaService.actualizarAyudantes(id, request, tecnicoIdDeToken(authorization)));
     }
 
     @PostMapping
@@ -63,5 +76,15 @@ public class TareaController {
     @DeleteMapping("/{id}")
     public void eliminar(@PathVariable Long id) {
         tareaService.eliminar(id);
+    }
+
+    private Long tecnicoIdDeToken(String authorization) {
+        if (authorization != null && authorization.startsWith("Bearer ")) {
+            String token = authorization.substring(7);
+            if (jwtUtil.isValid(token)) {
+                return jwtUtil.extractTecnicoId(token);
+            }
+        }
+        return null;
     }
 }

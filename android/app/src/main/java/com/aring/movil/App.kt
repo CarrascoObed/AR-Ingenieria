@@ -1,5 +1,6 @@
 package com.aring.movil
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +55,7 @@ import com.aring.movil.ui.panel.TableroFlujo
 import com.aring.movil.ui.panel.TableroSeleccion
 import com.aring.movil.ui.screens.LoginScreen
 import com.aring.movil.ui.tecnico.DetalleTareaTecnico
+import com.aring.movil.ui.tecnico.AdministrarAyudantesScreen
 import com.aring.movil.ui.tecnico.IngresarTareaScreen
 import com.aring.movil.ui.tecnico.TareasTecnicoScreen
 import com.aring.movil.ui.theme.FondoGris
@@ -97,6 +99,7 @@ fun App() {
 private sealed interface PantallaTec {
     data object Lista : PantallaTec
     data class Detalle(val tarea: Tarea) : PantallaTec
+    data class AdministrarAyudantes(val tarea: Tarea) : PantallaTec
     data class Ingresar(val tarea: Tarea) : PantallaTec
     data class SeleccionTablero(val tarea: Tarea) : PantallaTec
     data class FlujoTablero(val tarea: Tarea, val tipo: String, val inspectionId: String) : PantallaTec
@@ -108,6 +111,7 @@ private val PantallaTecSaver = listSaver<PantallaTec, String>(
         when (pantalla) {
             is PantallaTec.Lista -> listOf("Lista")
             is PantallaTec.Detalle -> listOf("Detalle", pantalla.tarea.id.toString())
+            is PantallaTec.AdministrarAyudantes -> listOf("AdministrarAyudantes", pantalla.tarea.id.toString())
             is PantallaTec.Ingresar -> listOf("Ingresar", pantalla.tarea.id.toString())
             is PantallaTec.SeleccionTablero -> listOf("SeleccionTablero", pantalla.tarea.id.toString())
             is PantallaTec.FlujoTablero -> listOf("FlujoTablero", pantalla.tarea.id.toString(), pantalla.tipo, pantalla.inspectionId)
@@ -119,6 +123,7 @@ private val PantallaTecSaver = listSaver<PantallaTec, String>(
             ?.let { id -> Repositorio.tareas.firstOrNull { it.id == id } }
         when (lista[0]) {
             "Detalle" -> tarea?.let { PantallaTec.Detalle(it) }
+            "AdministrarAyudantes" -> tarea?.let { PantallaTec.AdministrarAyudantes(it) }
             "Ingresar" -> tarea?.let { PantallaTec.Ingresar(it) }
             "SeleccionTablero" -> tarea?.let { PantallaTec.SeleccionTablero(it) }
             "FlujoTablero" -> tarea?.let { PantallaTec.FlujoTablero(it, lista.getOrNull(2) ?: "", lista.getOrNull(3) ?: newId()) }
@@ -137,6 +142,7 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
     }
     var confirmarFinalizar by rememberSaveable { mutableStateOf(false) }
     var tareaFinalizarId by rememberSaveable { mutableIntStateOf(0) }
+    var segundosRestantes by rememberSaveable { mutableIntStateOf(60) }
     var errorFinalizar by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
@@ -146,6 +152,28 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
 
     LaunchedEffect(Unit) {
         runCatching { Repositorio.cargarTecnico(tecnico.id) }
+    }
+
+    LaunchedEffect(tecnico.id) {
+        var actualizacionEnCurso = false
+        while (true) {
+            kotlinx.coroutines.delay(1_000)
+            if (segundosRestantes <= 1) {
+                segundosRestantes = 60
+                if (!actualizacionEnCurso) {
+                    actualizacionEnCurso = true
+                    launch {
+                        try {
+                            runCatching { Repositorio.cargarTecnico(tecnico.id) }
+                        } finally {
+                            actualizacionEnCurso = false
+                        }
+                    }
+                }
+            } else {
+                segundosRestantes -= 1
+            }
+        }
     }
 
     // Fase 1a: al recuperar conexión se re-programa el envío del outbox y se refresca la vista,
@@ -193,8 +221,13 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
 
     fun volver() {
         errorFinalizar = ""
-        pantalla = PantallaTec.Lista
+        pantalla = when (val actual = pantalla) {
+            is PantallaTec.AdministrarAyudantes -> PantallaTec.Detalle(tareaActual(actual.tarea))
+            else -> PantallaTec.Lista
+        }
     }
+
+    BackHandler(enabled = pantalla is PantallaTec.AdministrarAyudantes) { volver() }
 
     Column(
         Modifier
@@ -207,6 +240,7 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                 iniciales = inicialesDe(tecnico.nombre, tecnico.apellido),
                 nombre = tecnico.nombre,
                 apellido = tecnico.apellido,
+                segundosRestantes = segundosRestantes,
                 onBack = if (pantalla is PantallaTec.Lista) {
                     null
                 } else {
@@ -233,6 +267,8 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                     val tarea = tareaActual(p.tarea)
                     DetalleTareaTecnico(
                         tarea = tarea,
+                        tecnicoId = tecnico.id,
+                        onAdministrarAyudantes = { pantalla = PantallaTec.AdministrarAyudantes(tarea) },
                         onIngresar = {
                             pantalla = if (OfflineSync.pendiente(tarea.id) && tarea.esCabecera(tecnico.id)) {
                                 PantallaTec.SeleccionTablero(tarea)
@@ -244,6 +280,11 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                         }
                     )
                 }
+                is PantallaTec.AdministrarAyudantes -> AdministrarAyudantesScreen(
+                    tecnico = tecnico,
+                    tarea = tareaActual(p.tarea),
+                    onGuardado = { actualizada -> pantalla = PantallaTec.Detalle(actualizada) }
+                )
                 is PantallaTec.Ingresar -> IngresarTareaScreen(
                     tecnico = tecnico,
                     tarea = tareaActual(p.tarea),

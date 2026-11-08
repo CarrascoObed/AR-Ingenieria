@@ -34,4 +34,10 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
     @Modifying
     @Query("delete from Notificacion n where n.tareaId = :tareaId")
     int borrarDeTarea(@Param("tareaId") Long tareaId);
+
+    @Modifying
+    @Query("delete from Notificacion n where n.tareaId = :tareaId "
+            + "and n.tecnicoDestinoId = :tecnicoId "
+            + "and n.tipo = com.aring.model.TipoNotificacion.INVITACION")
+    int borrarInvitacionDeTarea(@Param("tareaId") Long tareaId, @Param("tecnicoId") Long tecnicoId);
 }

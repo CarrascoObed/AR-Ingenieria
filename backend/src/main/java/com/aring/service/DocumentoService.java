@@ -215,7 +215,7 @@ public class DocumentoService {
             Sheet sheet = workbook.createSheet("Rendición de servicios");
             sheet.setDisplayGridlines(false);
 
-            int[] anchos = {7, 20, 33, 18, 16, 50, 22, 22};
+            int[] anchos = {7, 20, 33, 18, 16, 50, 22, 22, 36};
             for (int i = 0; i < anchos.length; i++) {
                 sheet.setColumnWidth(i + 1, anchos[i] * 256);
             }
@@ -241,18 +241,18 @@ public class DocumentoService {
                 }
                 primerBloque = false;
 
-                // Título B3:I3
+                // Título B3:J3
                 Row filaTitulo = sheet.createRow(fila++);
                 filaTitulo.setHeightInPoints(28);
-                for (int c = 1; c <= 8; c++) {
+                for (int c = 1; c <= 9; c++) {
                     filaTitulo.createCell(c).setCellStyle(estiloTitulo);
                 }
                 filaTitulo.getCell(1).setCellValue("Rendicion de servicios");
-                sheet.addMergedRegion(new CellRangeAddress(fila - 1, fila - 1, 1, 8));
+                sheet.addMergedRegion(new CellRangeAddress(fila - 1, fila - 1, 1, 9));
 
-                // Cabecera B4:I4
+                // Cabecera B4:J4
                 String[] cabeceras = {"Piso", "Ubicación", "Descripcion", "Tipo de tablero", "Tamaño tablero", "Observaciones",
-                        "Nivel de criticidad", "Valor reparación"};
+                        "Nivel de criticidad", "Valor reparación", "Ayudantes de la tarea"};
                 Row filaCabecera = sheet.createRow(fila++);
                 filaCabecera.setHeightInPoints(22);
                 for (int i = 0; i < cabeceras.length; i++) {
@@ -278,6 +278,7 @@ public class DocumentoService {
                         escribirCelda(row, 6, "", alternar ? datoTextoAlt : datoTexto);
                         escribirCelda(row, 7, "", alternar ? datoCentradoAlt : datoCentrado);
                         escribirCelda(row, 8, "", alternar ? datoMonedaAlt : datoMoneda);
+                        escribirCelda(row, 9, ayudantesTarea(tarea), alternar ? datoTextoAlt : datoTexto);
                         alternar = !alternar;
                     } else {
                         for (ObservacionTablero obs : observaciones) {
@@ -290,6 +291,7 @@ public class DocumentoService {
                             escribirCelda(row, 6, obs.getTexto(), alternar ? datoTextoAlt : datoTexto);
                             escribirCelda(row, 7, "", alternar ? datoCentradoAlt : datoCentrado);
                             escribirCelda(row, 8, "", alternar ? datoMonedaAlt : datoMoneda);
+                            escribirCelda(row, 9, ayudantesTarea(tarea), alternar ? datoTextoAlt : datoTexto);
                             alternar = !alternar;
                         }
                     }
@@ -301,7 +303,7 @@ public class DocumentoService {
                 escribirCelda(row, 1,
                         "No hay tareas finalizadas con tableros registrados para los filtros seleccionados.",
                         datoTexto);
-                sheet.addMergedRegion(new CellRangeAddress(fila, fila, 1, 8));
+                sheet.addMergedRegion(new CellRangeAddress(fila, fila, 1, 9));
             }
 
             workbook.write(out);

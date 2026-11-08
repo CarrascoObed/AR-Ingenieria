@@ -27,8 +27,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aring.movil.data.Tarea
+import com.aring.movil.data.Repositorio
 import com.aring.movil.ui.components.BannerError
 import com.aring.movil.ui.components.BtnPrimario
+import com.aring.movil.ui.components.BtnSecundario
 import com.aring.movil.ui.components.HorizontalSeparador
 import com.aring.movil.ui.components.Tarjeta
 import com.aring.movil.ui.theme.TextoGris
@@ -38,6 +40,8 @@ import com.aring.movil.ui.theme.Violeta
 @Composable
 fun DetalleTareaTecnico(
     tarea: Tarea,
+    tecnicoId: Int,
+    onAdministrarAyudantes: () -> Unit,
     onIngresar: (Tarea) -> Unit,
 ) {
     var error by remember { mutableStateOf("") }
@@ -85,6 +89,24 @@ fun DetalleTareaTecnico(
             Text(tarea.descripcion, color = TextoOscuro, fontSize = 14.sp)
         }
 
+        if (tarea.estado == "En proceso") {
+            val ayudantes = tarea.tecnicoAyudantesIds.map { id ->
+                Repositorio.tecnicos.firstOrNull { it.id == id }
+                    ?.let { "${it.nombre} ${it.apellido}" }
+                    ?: "Técnico $id"
+            }
+            Spacer(Modifier.height(14.dp))
+            Tarjeta {
+                Text("Ayudantes de la tarea", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextoGris)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    ayudantes.joinToString("\n").ifBlank { "Sin ayudantes asignados" },
+                    color = TextoOscuro,
+                    fontSize = 14.sp
+                )
+            }
+        }
+
         Spacer(Modifier.height(20.dp))
 
         if (error.isNotEmpty()) {
@@ -129,6 +151,14 @@ fun DetalleTareaTecnico(
                 fontSize = 13.sp
             )
         } else {
+            if (tarea.estado == "En proceso" && tarea.esCabecera(tecnicoId) && !tarea.sincronizacionPendiente) {
+                BtnSecundario(
+                    texto = "Administrar ayudantes",
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onAdministrarAyudantes
+                )
+                Spacer(Modifier.height(12.dp))
+            }
             BtnPrimario(
                 texto = if (tarea.estado == "En proceso") "Retomar tarea" else "Ingresar a la tarea",
                 modifier = Modifier.fillMaxWidth(),

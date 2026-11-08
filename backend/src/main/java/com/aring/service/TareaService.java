@@ -1,6 +1,7 @@
 package com.aring.service;
 
 import com.aring.dto.EstadoRequest;
+import com.aring.dto.ActualizarAyudantesRequest;
 import com.aring.dto.IniciarRequest;
 import com.aring.dto.TareaRequest;
 import com.aring.dto.TareaUpdateRequest;
@@ -24,7 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class TareaService {
@@ -185,6 +188,60 @@ public class TareaService {
                     invitado.getId());
         }
         return tarea;
+    }
+
+    @Transactional
+    public Tarea actualizarAyudantes(Long id, ActualizarAyudantesRequest request, Long tecnicoAutenticadoId) {
+        Tarea tarea = buscarOError(id);
+        if (tecnicoAutenticadoId == null || tarea.getTecnicoCabecera() == null
+                || !tarea.getTecnicoCabecera().getId().equals(tecnicoAutenticadoId)) {
+            throw new ApiException("Solo el técnico de cabecera puede administrar los ayudantes.",
+                    HttpStatus.FORBIDDEN);
+        }
+        if (tarea.getEstado() != EstadoTarea.EN_PROCESO) {
+            throw new ApiException("Los ayudantes solo se pueden modificar mientras la tarea está en proceso.",
+                    HttpStatus.CONFLICT);
+        }
+
+        List<Long> ayudantesIds = request.getAyudantesIds() == null ? List.of() : request.getAyudantesIds();
+        if (ayudantesIds.size() > 5 || ayudantesIds.stream().anyMatch(idTecnico -> idTecnico == null)) {
+            throw new ApiException("Seleccione hasta cinco ayudantes válidos.", HttpStatus.BAD_REQUEST);
+        }
+        Set<Long> idsUnicos = new HashSet<>(ayudantesIds);
+        if (idsUnicos.size() != ayudantesIds.size()) {
+            throw new ApiException("No se puede agregar dos veces al mismo ayudante.", HttpStatus.BAD_REQUEST);
+        }
+        if (idsUnicos.contains(tarea.getTecnicoCabecera().getId())) {
+            throw new ApiException("El técnico de cabecera no puede agregarse como ayudante.", HttpStatus.BAD_REQUEST);
+        }
+
+        List<Tecnico> nuevosAyudantes = new ArrayList<>();
+        for (Long ayudanteId : ayudantesIds) {
+            nuevosAyudantes.add(tecnicoRepository.findById(ayudanteId)
+                    .orElseThrow(() -> new ApiException("Uno de los técnicos seleccionados no existe.",
+                            HttpStatus.BAD_REQUEST)));
+        }
+
+        Set<Long> idsActuales = tarea.getTecnicosInvitados().stream().map(Tecnico::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        for (Long idActual : idsActuales) {
+            if (!idsUnicos.contains(idActual)) {
+                notificacionRepository.borrarInvitacionDeTarea(tarea.getId(), idActual);
+            }
+        }
+
+        tarea.setTecnicosInvitados(nuevosAyudantes);
+        Tarea actualizada = tareaRepository.save(tarea);
+        String nombreCabecera = tarea.getTecnicoCabecera().getNombre() + " "
+                + tarea.getTecnicoCabecera().getApellido();
+        for (Tecnico ayudante : nuevosAyudantes) {
+            if (!idsActuales.contains(ayudante.getId())) {
+                notificacionService.crear(
+                        "Técnico: " + nombreCabecera + " te ha agregado a la tarea " + tarea.getCodigo() + ".",
+                        TipoNotificacion.INVITACION, tarea.getId(), ayudante.getId());
+            }
+        }
+        return actualizada;
     }
 
     @Transactional(readOnly = true)

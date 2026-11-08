@@ -12,17 +12,27 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aring.movil.data.Repositorio
+import com.aring.movil.data.Prefs
 import com.aring.movil.data.Tarea
 import com.aring.movil.data.Tecnico
 import com.aring.movil.ui.components.ChipEstado
 import com.aring.movil.ui.components.ChipTipo
+import com.aring.movil.ui.components.ConfirmarDialog
 import com.aring.movil.ui.components.Tarjeta
 import com.aring.movil.ui.components.Vacio
 import com.aring.movil.ui.theme.TextoGris
@@ -34,8 +44,13 @@ fun TareasTecnicoScreen(
     tecnico: Tecnico,
     onAbrirTarea: (Tarea) -> Unit,
 ) {
+    var ocultasFinalizadas by remember(tecnico.id) {
+        mutableStateOf(Prefs.leerOcultasFinalizadas().mapNotNull { it.toIntOrNull() }.toSet())
+    }
+    var confirmarLimpieza by remember { mutableStateOf(false) }
     val tareas = Repositorio.tareasDeTecnico(tecnico.id)
-    val finalizadas = Repositorio.finalizadasDeTecnico(tecnico.id)
+    val todasFinalizadas = Repositorio.finalizadasDeTecnico(tecnico.id)
+    val finalizadas = todasFinalizadas.filterNot { it.id in ocultasFinalizadas }
     val hayHistorial = finalizadas.isNotEmpty()
 
     Column(
@@ -62,7 +77,13 @@ fun TareasTecnicoScreen(
         Spacer(Modifier.height(12.dp))
 
         if (tareas.isEmpty() && !hayHistorial) {
-            Vacio("No tienes tareas asignadas.")
+            Vacio(
+                if (todasFinalizadas.isNotEmpty()) {
+                    "No hay tareas activas. Las finalizadas se ocultaron de esta lista y siguen guardadas en el servidor."
+                } else {
+                    "No tienes tareas asignadas."
+                }
+            )
         } else {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -74,14 +95,26 @@ fun TareasTecnicoScreen(
                 if (hayHistorial) {
                     item(key = "historial") {
                         Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Tareas finalizadas",
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Center,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                            color = TextoOscuro
-                        )
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Tareas finalizadas",
+                                modifier = Modifier.weight(1f),
+                                textAlign = TextAlign.Center,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = TextoOscuro
+                            )
+                            IconButton(onClick = { confirmarLimpieza = true }) {
+                                Icon(
+                                    Icons.Rounded.DeleteSweep,
+                                    contentDescription = "Limpiar lista de tareas finalizadas",
+                                    tint = Violeta
+                                )
+                            }
+                        }
                         Text(
                             "Historial de tareas completadas; sus informes están en el panel web.",
                             modifier = Modifier.fillMaxWidth(),
@@ -96,6 +129,21 @@ fun TareasTecnicoScreen(
                 }
             }
         }
+    }
+
+    if (confirmarLimpieza) {
+        ConfirmarDialog(
+            titulo = "Limpiar tareas finalizadas",
+            mensaje = "Se ocultarán de esta aplicación las tareas finalizadas que aparecen en la lista. No se borrarán del servidor ni sus informes o evidencias.",
+            confirmarTexto = "Limpiar lista",
+            onConfirmar = {
+                val idsOcultos = ocultasFinalizadas + todasFinalizadas.map { it.id }
+                Prefs.guardarOcultasFinalizadas(idsOcultos.toList())
+                ocultasFinalizadas = idsOcultos
+                confirmarLimpieza = false
+            },
+            onCancelar = { confirmarLimpieza = false }
+        )
     }
 }
 

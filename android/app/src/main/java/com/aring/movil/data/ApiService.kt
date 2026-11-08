@@ -68,6 +68,18 @@ object ApiService {
         )
     }
 
+    suspend fun actualizarAyudantes(id: Int, ayudantesIds: List<Int>): JSONObject {
+        val arr = JSONArray()
+        ayudantesIds.forEach { arr.put(it) }
+        return parsearObjeto(
+            ejecutar(
+                "PUT",
+                "/api/tareas/$id/ayudantes",
+                JSONObject().put("ayudantesIds", arr).toString()
+            )
+        )
+    }
+
     suspend fun cambiarEstadoTarea(id: Int, estado: String): JSONObject =
         parsearObjeto(
             ejecutar(

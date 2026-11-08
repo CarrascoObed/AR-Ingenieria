@@ -92,6 +92,12 @@ object Repositorio {
         reemplazarTarea(tareaDesdeJson(ApiService.iniciarTarea(id, ayudantesIds)))
     }
 
+    suspend fun actualizarAyudantes(id: Int, ayudantesIds: List<Int>): Tarea {
+        val tarea = tareaDesdeJson(ApiService.actualizarAyudantes(id, ayudantesIds))
+        reemplazarTarea(tarea)
+        return tarea
+    }
+
     fun formatearFecha(iso: String): String {
         if (iso.isBlank()) return ""
         return try {
