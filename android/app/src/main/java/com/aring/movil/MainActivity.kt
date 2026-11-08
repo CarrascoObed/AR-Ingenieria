@@ -18,6 +18,9 @@ class MainActivity : ComponentActivity() {
         OfflineSync.reintentarPendientes(applicationContext)
         OfflineTaskCache.init(applicationContext)
         TableroDraftStore.init(applicationContext)
+        if (savedInstanceState == null) {
+            TableroDraftStore.limpiarIncompletos()
+        }
         RefrescoSesion.programar(applicationContext)
         setContent {
             ARIngMovilTheme {

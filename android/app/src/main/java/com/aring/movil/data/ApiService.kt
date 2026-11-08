@@ -152,8 +152,9 @@ object ApiService {
                 body
             }
         } catch (e: IOException) {
+            val detalle = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
             throw ApiException(
-                "No se pudo conectar con el servidor. Verifique que el backend esté disponible.",
+                "No se pudo conectar con el servidor. Detalle: $detalle",
                 null
             )
         }

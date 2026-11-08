@@ -12,6 +12,23 @@ object TableroDraftStore {
         prefs = context.getSharedPreferences("aring_tableros", Context.MODE_PRIVATE)
     }
 
+    /** Descarta borradores y registros sin nombre, que no pueden ser tableros realizados válidos. */
+    fun limpiarIncompletos(tareaId: Int? = null) {
+        val prefijoTarea = tareaId?.let { "_${it}_" }
+        val editor = prefs.edit()
+        prefs.all.entries.forEach { (key, raw) ->
+            if (!key.startsWith("draft_")) return@forEach
+            if (prefijoTarea != null && !Regex("draft_\\d+${Regex.escape(prefijoTarea)}").containsMatchIn(key)) return@forEach
+            val realizadoConNombre = raw is String && runCatching {
+                JSONObject(raw).let { it.optBoolean("finished") && it.optString("descripcion").isNotBlank() }
+            }.getOrDefault(false)
+            if (!realizadoConNombre) {
+                editor.remove(key)
+            }
+        }
+        editor.apply()
+    }
+
     /**
      * Clave del borrador por técnico: draft_{tecnicoId}_{tareaId}_{tipo}.
      * Así el ayudante nunca retoma el borrador que dejó el técnico de cabecera
@@ -27,17 +44,33 @@ object TableroDraftStore {
     data class Borrador(val id: String, val tipo: String, val descripcion: String, val ubicacion: String, val terminado: Boolean)
 
     fun listar(tareaId: Int): List<Borrador> {
+        limpiarIncompletos(tareaId)
         val tecnicoId = runCatching { com.aring.movil.data.Prefs.leerTecnico()?.id }.getOrNull() ?: 0
         val prefix = "draft_${tecnicoId}_${tareaId}_"
-        return prefs.all.entries.mapNotNull { (k, raw) ->
+        data class Guardado(val key: String, val borrador: Borrador, val firma: String)
+        val guardados = prefs.all.entries.mapNotNull { (k, raw) ->
             if (!k.startsWith(prefix) || raw !is String) return@mapNotNull null
             runCatching {
                 val p = k.removePrefix(prefix).split('_', limit = 2)
                 val json = JSONObject(raw)
                 val tipo = p[0]
-                Borrador(p.getOrElse(1) { "legacy" }, tipo, json.optString("descripcion"), json.optString("ubicacion"), json.optBoolean("finished"))
+                val firma = "$tipo|${JSONObject(json.toString()).apply { remove("finished") }}"
+                Guardado(
+                    k,
+                    Borrador(p.getOrElse(1) { "legacy" }, tipo, json.optString("descripcion"), json.optString("ubicacion"), json.optBoolean("finished")),
+                    firma
+                )
             }.getOrNull()
-        }.sortedBy { it.id }
+        }
+        val canonicos = guardados.groupBy { it.firma }.values.map { grupo ->
+            grupo.maxWithOrNull(compareBy<Guardado>({ it.borrador.terminado }, { it.borrador.id != "legacy" }))!!
+        }
+        val clavesCanonicas = canonicos.mapTo(mutableSetOf()) { it.key }
+        val clavesDuplicadas = guardados.asSequence().map { it.key }.filterNot { it in clavesCanonicas }.toList()
+        if (clavesDuplicadas.isNotEmpty()) {
+            prefs.edit().also { editor -> clavesDuplicadas.forEach(editor::remove) }.apply()
+        }
+        return canonicos.map { it.borrador }.sortedBy { it.id }
     }
 
     fun limpiar(tareaId: Int, tipo: String, inspectionId: String) { prefs.edit().remove(key(tareaId, tipo, inspectionId)).apply() }
@@ -47,7 +80,9 @@ object TableroDraftStore {
     }
 
     fun guardarTrifasico(tareaId: Int, st: TrifasicoState, inspectionId: String = st.inspectionId) {
-        prefs.edit().putString(key(tareaId, TYPE_TRIFASICO, inspectionId), jsonTrifasico(st).put("finished", st.finished).toString()).apply()
+        val storageKey = key(tareaId, TYPE_TRIFASICO, inspectionId)
+        val yaTerminado = prefs.getString(storageKey, null)?.let { runCatching { JSONObject(it).optBoolean("finished") }.getOrDefault(false) } ?: false
+        prefs.edit().putString(storageKey, jsonTrifasico(st).put("finished", st.finished || yaTerminado).toString()).apply()
     }
 
     fun cargarTrifasico(tareaId: Int, inspectionId: String = "legacy"): TrifasicoState? {
@@ -56,7 +91,9 @@ object TableroDraftStore {
     }
 
     fun guardarMonofasico(tareaId: Int, st: MonofasicoState, inspectionId: String = st.inspectionId) {
-        prefs.edit().putString(key(tareaId, TYPE_MONOFASICO, inspectionId), jsonMonofasico(st).put("finished", st.finished).toString()).apply()
+        val storageKey = key(tareaId, TYPE_MONOFASICO, inspectionId)
+        val yaTerminado = prefs.getString(storageKey, null)?.let { runCatching { JSONObject(it).optBoolean("finished") }.getOrDefault(false) } ?: false
+        prefs.edit().putString(storageKey, jsonMonofasico(st).put("finished", st.finished || yaTerminado).toString()).apply()
     }
 
     fun cargarMonofasico(tareaId: Int, inspectionId: String = "legacy"): MonofasicoState? {

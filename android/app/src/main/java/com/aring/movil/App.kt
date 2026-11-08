@@ -257,6 +257,7 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                         puedeFinalizar = !tarea.esInvitado(tecnico.id),
                         onSeleccionarTipo = { tipo -> pantalla = PantallaTec.FlujoTablero(p.tarea, tipo, newId()) },
                         onEditar = { borrador -> pantalla = PantallaTec.FlujoTablero(p.tarea, borrador.tipo, borrador.id) },
+                        onEliminar = { tablero -> TableroDraftStore.limpiar(tarea.id, tablero.tipo, tablero.id) },
                         onFinalizar = {
                             tareaFinalizarId = p.tarea.id
                             confirmarFinalizar = true
@@ -268,8 +269,14 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                     tipo = p.tipo,
                     tareaId = p.tarea.id,
                     inspectionId = p.inspectionId,
-                    onFinalizado = { pantalla = PantallaTec.SeleccionTablero(p.tarea) },
-                    onVolver = { pantalla = PantallaTec.SeleccionTablero(p.tarea) }
+                    onFinalizado = {
+                        TableroDraftStore.limpiarIncompletos(p.tarea.id)
+                        pantalla = PantallaTec.SeleccionTablero(p.tarea)
+                    },
+                    onVolver = {
+                        TableroDraftStore.limpiarIncompletos(p.tarea.id)
+                        pantalla = PantallaTec.SeleccionTablero(p.tarea)
+                    }
                 )
                 is PantallaTec.Confirmacion -> TableroConfirmacion(
                     tarea = tareaActual(p.tarea),
@@ -325,7 +332,7 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                             return@launch
                         }
                         if (borradores.any { !it.terminado }) {
-                            errorFinalizar = "Hay tableros sin completar. Ábralos, termine su registro y vuelva a revisar antes de cerrar la tarea."
+                            errorFinalizar = "Hay inspecciones sin completar. Seleccione el tipo de tablero correspondiente para continuar y terminar su registro antes de cerrar la tarea."
                             return@launch
                         }
                         val cierreYaPendiente = OfflineSync.pendiente(tareaFinalizarId)

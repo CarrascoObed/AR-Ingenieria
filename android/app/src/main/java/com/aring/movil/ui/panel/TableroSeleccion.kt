@@ -22,9 +22,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ElectricalServices
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -43,6 +47,7 @@ import com.aring.movil.data.panel.TableroDraftStore
 import com.aring.movil.data.panel.TYPE_MONOFASICO
 import com.aring.movil.data.panel.TYPE_TRIFASICO
 import com.aring.movil.ui.components.BtnPrimario
+import com.aring.movil.ui.components.ConfirmarDialog
 import com.aring.movil.ui.components.Tarjeta
 import com.aring.movil.ui.theme.Blanco
 import com.aring.movil.ui.theme.BordeSuave
@@ -106,13 +111,14 @@ fun TableroSeleccion(
     puedeFinalizar: Boolean = true,
     onSeleccionarTipo: (String) -> Unit,
     onEditar: (TableroDraftStore.Borrador) -> Unit = {},
+    onEliminar: (TableroDraftStore.Borrador) -> Unit = {},
     onFinalizar: () -> Unit,
     onVolver: () -> Unit
 ) {
     BackHandler(onBack = onVolver)
-    var mostrarIncompletos by rememberSaveable(tarea.id) { mutableStateOf(false) }
-    val completados = borradores.filter { it.terminado }
-    val incompletos = borradores.filterNot { it.terminado }
+    var tableroAEliminarId by rememberSaveable(tarea.id) { mutableStateOf<String?>(null) }
+    var idsEliminados by rememberSaveable(tarea.id) { mutableStateOf("|") }
+    val completados = borradores.filter { it.terminado && "|${it.id}|" !in idsEliminados }
 
     Column(
         Modifier
@@ -148,41 +154,37 @@ fun TableroSeleccion(
         )
         Spacer(Modifier.height(20.dp))
 
-        if (completados.isNotEmpty() || incompletos.isNotEmpty()) {
-            if (completados.isNotEmpty()) {
-                Text("Revisar tableros guardados", fontWeight = FontWeight.Bold, color = TextoOscuro, fontSize = 16.sp)
-                Spacer(Modifier.height(8.dp))
-            }
+        if (completados.isNotEmpty()) {
+            Text("Tableros realizados", fontWeight = FontWeight.Bold, color = TextoOscuro, fontSize = 16.sp)
+            Spacer(Modifier.height(8.dp))
             completados.forEachIndexed { index, b ->
                 Tarjeta {
-                    Column(Modifier.fillMaxWidth().clickable { onEditar(b) }.padding(4.dp)) {
-                        Text("${if (b.tipo == TYPE_TRIFASICO) "Trifásico" else "Monofásico"} · Tablero ${index + 1}", fontWeight = FontWeight.Bold, color = TextoOscuro)
-                        Text(listOf(b.ubicacion, b.descripcion).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "Sin ubicación ni descripción" }, color = TextoGris, fontSize = 13.sp)
-                        Text("Tocar para revisar o corregir", color = VioletaOscuro, fontSize = 12.sp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f).clickable { onEditar(b) }.padding(vertical = 4.dp)) {
+                            Text(
+                                b.descripcion.ifBlank { "Tablero sin nombre" },
+                                fontWeight = FontWeight.Bold,
+                                color = TextoOscuro
+                            )
+                            Text(
+                                "Tablero ${index + 1}",
+                                fontFamily = FontFamily.SansSerif,
+                                color = TextoGris,
+                                fontSize = 11.sp
+                            )
+                        }
+                        IconButton(onClick = { onEditar(b) }) {
+                            Icon(Icons.Rounded.Edit, contentDescription = "Modificar tablero", tint = Violeta)
+                        }
+                        IconButton(onClick = { tableroAEliminarId = b.id }) {
+                            Icon(Icons.Rounded.DeleteOutline, contentDescription = "Eliminar tablero", tint = androidx.compose.ui.graphics.Color(0xFFC62828))
+                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-            }
-            if (incompletos.isNotEmpty()) {
-                Text(
-                    if (mostrarIncompletos) "Ocultar borradores incompletos" else "Mostrar ${incompletos.size} borrador(es) incompleto(s)",
-                    modifier = Modifier.clickable { mostrarIncompletos = !mostrarIncompletos }.padding(vertical = 8.dp),
-                    color = VioletaOscuro,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp
-                )
-            }
-            if (mostrarIncompletos) {
-                incompletos.forEachIndexed { index, b ->
-                    Tarjeta {
-                        Column(Modifier.fillMaxWidth().clickable { onEditar(b) }.padding(4.dp)) {
-                            Text("${if (b.tipo == TYPE_TRIFASICO) "Trifásico" else "Monofásico"} · Borrador ${completados.size + index + 1}", fontWeight = FontWeight.Bold, color = TextoOscuro)
-                            Text(listOf(b.ubicacion, b.descripcion).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "Sin ubicación ni descripción" }, color = TextoGris, fontSize = 13.sp)
-                            Text("Tocar para continuar este borrador", color = VioletaOscuro, fontSize = 12.sp)
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                }
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -255,5 +257,19 @@ fun TableroSeleccion(
                 fontSize = 12.sp
             )
         }
+    }
+
+    borradores.firstOrNull { it.id == tableroAEliminarId && it.terminado }?.let { tablero ->
+        ConfirmarDialog(
+            titulo = "Eliminar tablero",
+            mensaje = "¿Eliminar este tablero realizado? No se incluirá en el informe al cerrar la tarea.",
+            confirmarTexto = "Eliminar",
+            onConfirmar = {
+                onEliminar(tablero)
+                idsEliminados += "${tablero.id}|"
+                tableroAEliminarId = null
+            },
+            onCancelar = { tableroAEliminarId = null }
+        )
     }
 }
