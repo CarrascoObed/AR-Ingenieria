@@ -34,6 +34,7 @@ import com.aring.movil.ui.theme.VioletaClaro
 @Composable
 fun TableroConfirmacion(
     tarea: Tarea,
+    progreso: String = "",
     onVolverATareas: () -> Unit
 ) {
     Column(
@@ -60,7 +61,7 @@ fun TableroConfirmacion(
         }
         Spacer(Modifier.height(24.dp))
         Text(
-            "Mantenimiento: ${tarea.codigo} finalizado correctamente",
+            if (tarea.sincronizacionPendiente) "Cierre de tarea en proceso" else "Mantenimiento: ${tarea.codigo} finalizado correctamente",
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
             fontWeight = FontWeight.ExtraBold,
@@ -70,13 +71,23 @@ fun TableroConfirmacion(
         Spacer(Modifier.height(10.dp))
         Text(
             if (tarea.sincronizacionPendiente)
-                "La sincronización está pendiente: la tarea y sus informes están guardados en este dispositivo y se enviarán automáticamente cuando vuelva la conexión."
+                "El cierre quedó guardado en este dispositivo. Los informes se prepararán y enviarán en segundo plano, y la tarea se cerrará en el servidor cuando se confirmen todos."
             else "Todos los tableros realizados fueron registrados y la tarea quedó finalizada.",
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
             color = TextoGris,
             fontSize = 14.sp
         )
+        if (progreso.isNotBlank()) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                progreso,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+                color = TextoGris,
+                fontSize = 13.sp
+            )
+        }
         Spacer(Modifier.height(32.dp))
         BtnPrimario(
             texto = "Volver a tareas",

@@ -39,6 +39,9 @@ class TrifasicoViewModel(private val tareaId: Int, private val inspectionId: Str
     fun setDescripcion(value: String) =
         cambiar { it.copy(registration = it.registration.copy(descripcion = value)) }
 
+    fun descripcionDuplicada(value: String, nombresServidor: List<Pair<String, String?>>): Boolean =
+        TableroDraftStore.hayDescripcionDuplicada(tareaId, inspectionId, value, nombresServidor)
+
     fun setUbicacion(value: String) =
         cambiar { it.copy(registration = it.registration.copy(ubicacion = value)) }
 

@@ -92,6 +92,15 @@ object ApiService {
     suspend fun tecnicos(): JSONArray =
         parsearArreglo(ejecutar("GET", "/api/tecnicos"))
 
+    suspend fun nombresTableros(tareaId: Int): List<Pair<String, String?>> {
+        val reportes = parsearArreglo(ejecutar("GET", "/api/tareas/$tareaId/tableros/nombres"))
+        return (0 until reportes.length()).mapNotNull { index ->
+            reportes.optJSONObject(index)?.let { objeto ->
+                objeto.optString("descripcion") to objeto.optString("clientOperationId").takeIf { it.isNotBlank() && it != "null" }
+            }
+        }
+    }
+
     suspend fun enviarInforme(
         token: String,
         tareaId: Long,

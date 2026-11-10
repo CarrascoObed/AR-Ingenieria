@@ -4,10 +4,12 @@ import com.aring.model.EstadoTarea;
 import com.aring.model.Tarea;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 
 import java.util.List;
 import java.util.Optional;
@@ -15,6 +17,10 @@ import java.util.Optional;
 public interface TareaRepository extends JpaRepository<Tarea, Long>, JpaSpecificationExecutor<Tarea> {
 
     Optional<Tarea> findByCodigoIgnoreCase(String codigo);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select t from Tarea t where t.id = :id")
+    Optional<Tarea> findByIdForUpdate(@Param("id") Long id);
 
     @Query("select distinct trim(t.nombreRecinto) from Tarea t " +
             "where t.estado = com.aring.model.EstadoTarea.FINALIZADA " +

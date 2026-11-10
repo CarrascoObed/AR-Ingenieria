@@ -1,6 +1,7 @@
 package com.aring.service;
 
 import com.aring.dto.InformeTableroDto;
+import com.aring.dto.TableroNombreDto;
 import com.aring.dto.TableroRequest;
 import com.aring.exception.ApiException;
 import com.aring.model.ChecklistTablero;
@@ -19,7 +20,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.text.Normalizer;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 public class TableroService {
@@ -38,7 +41,7 @@ public class TableroService {
 
     @Transactional
     public InformeTableroDto crear(Long tareaId, TableroRequest request, Long tecnicoIdToken) {
-        Tarea tarea = tareaRepository.findById(tareaId)
+        Tarea tarea = tareaRepository.findByIdForUpdate(tareaId)
                 .orElseThrow(() -> new ApiException("La tarea no existe.", HttpStatus.NOT_FOUND));
 
         if (request.getClientOperationId() != null && !request.getClientOperationId().isBlank()) {
@@ -49,6 +52,15 @@ public class TableroService {
                 }
                 return InformeTableroDto.from(existente.get());
             }
+        }
+
+        String descripcionNormalizada = normalizarNombre(request.getDescripcion());
+        boolean nombreDuplicado = informeTableroRepository.listarNombresPorTarea(tareaId).stream()
+                .filter(tablero -> request.getClientOperationId() == null
+                        || !request.getClientOperationId().equals(tablero.clientOperationId()))
+                .anyMatch(tablero -> descripcionNormalizada.equals(normalizarNombre(tablero.descripcion())));
+        if (nombreDuplicado) {
+            throw new ApiException("Ya existe un tablero con ese nombre en esta tarea.", HttpStatus.CONFLICT);
         }
 
         InformeTablero informe = new InformeTablero();
@@ -117,5 +129,16 @@ public class TableroService {
     public List<InformeTableroDto> listarPorTarea(Long tareaId) {
         return informeTableroRepository.findAllByTareaIdOrderByIdAsc(tareaId).stream()
                 .map(InformeTableroDto::from).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<TableroNombreDto> listarNombresPorTarea(Long tareaId) {
+        return informeTableroRepository.listarNombresPorTarea(tareaId);
+    }
+
+    private String normalizarNombre(String nombre) {
+        String sinAcentos = Normalizer.normalize(nombre == null ? "" : nombre.trim(), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "");
+        return sinAcentos.toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
     }
 }

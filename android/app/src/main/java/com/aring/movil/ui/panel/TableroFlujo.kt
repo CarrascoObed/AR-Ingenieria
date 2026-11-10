@@ -3,6 +3,7 @@ package com.aring.movil.ui.panel
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -14,6 +15,7 @@ import androidx.compose.ui.Modifier
 import com.aring.movil.camera.CameraScreen
 import com.aring.movil.camera.OpenCamera
 import com.aring.movil.camera.PhotoBus
+import com.aring.movil.data.ApiService
 import com.aring.movil.data.panel.TYPE_MONOFASICO
 import com.aring.movil.data.panel.TYPE_TRIFASICO
 import com.aring.movil.data.panel.newId
@@ -67,6 +69,10 @@ fun TableroFlujo(
 ) {
     val trifasicoVm = remember(tareaId, inspectionId) { TrifasicoViewModel(tareaId, inspectionId) }
     val monofasicoVm = remember(tareaId, inspectionId) { MonofasicoViewModel(tareaId, inspectionId) }
+    var nombresServidor by remember(tareaId) { mutableStateOf(emptyList<Pair<String, String?>>()) }
+    LaunchedEffect(tareaId) {
+        nombresServidor = runCatching { ApiService.nombresTableros(tareaId) }.getOrDefault(emptyList())
+    }
     var sub by rememberSaveable(stateSaver = SubPantallaSaver) {
         mutableStateOf<SubPantalla>(SubPantalla.Registro)
     }
@@ -107,12 +113,14 @@ fun TableroFlujo(
             if (tipo == TYPE_TRIFASICO) {
                 TrifasicoRegistroScreen(
                     vm = trifasicoVm,
+                    nombresServidor = nombresServidor,
                     onNext = { sub = SubPantalla.EvidenciasPrevias },
                     onBack = onVolver
                 )
             } else {
                 MonofasicoRegistroScreen(
                     vm = monofasicoVm,
+                    nombresServidor = nombresServidor,
                     onNext = { sub = SubPantalla.EvidenciasPrevias },
                     onBack = onVolver
                 )

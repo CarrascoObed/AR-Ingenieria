@@ -27,7 +27,13 @@ object OfflineSync {
         statusPrefs = context.getSharedPreferences("aring_outbox_status", Context.MODE_PRIVATE)
     }
 
-    @Synchronized fun guardarInforme(tareaId: Int, tecnico: Tecnico, payload: JSONObject, deferUntilFinalization: Boolean = false) {
+    @Synchronized fun guardarInforme(
+        tareaId: Int,
+        tecnico: Tecnico,
+        payload: JSONObject,
+        deferUntilFinalization: Boolean = false,
+        programarSincronizacion: Boolean = true
+    ) {
         guardarCredenciales(tecnico)
         val id = payload.optString("clientOperationId").ifBlank { UUID.randomUUID().toString() }
         payload.put("clientOperationId", id)
@@ -35,7 +41,7 @@ object OfflineSync {
         atomicWrite(File(root, "report-$id.json"), JSONObject()
             .put("tareaId", tareaId).put("tecnicoId", tecnico.id)
             .put("deferUntilFinalization", deferUntilFinalization).put("payload", payload).toString())
-        programar(root.context())
+        if (programarSincronizacion) programar(root.context())
     }
 
     @Synchronized fun guardarInicio(tareaId: Int, tecnico: Tecnico, ayudantesIds: List<Int>) {
@@ -51,6 +57,36 @@ object OfflineSync {
         atomicWrite(File(root, "finish-$tareaId.json"), JSONObject()
             .put("tareaId", tareaId).put("tecnicoId", tecnico.id).toString())
         programar(root.context())
+    }
+
+    /** Encola el cierre y deja que el Worker prepare los informes de forma secuencial. */
+    @Synchronized fun finalizarDesdeTableros(tareaId: Int, tecnico: Tecnico, cantidadTableros: Int) {
+        guardarCredenciales(tecnico)
+        if (!File(root, "finish-$tareaId.json").exists()) {
+            val manifest = JSONObject().put("tareaId", tareaId).put("tecnicoId", tecnico.id)
+                .put("operacionesPreparadas", JSONArray())
+            atomicWrite(File(root, "prepare-$tareaId.json"), manifest.toString())
+            atomicWrite(File(root, "finish-$tareaId.json"), JSONObject()
+                .put("tareaId", tareaId).put("tecnicoId", tecnico.id)
+                .put("prepararTableros", true).put("cantidadTableros", cantidadTableros).toString())
+        }
+        programar(root.context())
+    }
+
+    @Synchronized internal fun registrarTableroPreparado(tareaId: Int, operationId: String) {
+        val file = File(root, "prepare-$tareaId.json")
+        val manifest = if (file.exists()) JSONObject(file.readText()) else JSONObject()
+        val operations = manifest.optJSONArray("operacionesPreparadas") ?: JSONArray()
+        if ((0 until operations.length()).none { operations.optString(it) == operationId }) operations.put(operationId)
+        manifest.put("operacionesPreparadas", operations)
+        atomicWrite(file, manifest.toString())
+    }
+
+    internal fun tablerosPreparados(tareaId: Int): Set<String> {
+        val file = File(root, "prepare-$tareaId.json")
+        if (!file.exists()) return emptySet()
+        val operations = JSONObject(file.readText()).optJSONArray("operacionesPreparadas") ?: return emptySet()
+        return (0 until operations.length()).mapTo(mutableSetOf()) { operations.optString(it) }
     }
 
     fun informes(tareaId: Int): List<File> = root.listFiles { f -> f.name.startsWith("report-") && runCatching { JSONObject(f.readText()).optInt("tareaId") == tareaId }.getOrDefault(false) }
@@ -172,12 +208,62 @@ class OfflineSyncWorker(context: Context, params: WorkerParameters) : Worker(con
                 }
             }
 
+            // La conversión de fotos a Base64 se hace tablero por tablero fuera de la pantalla.
+            val finishRequests = directory.listFiles { f -> f.name.startsWith("finish-") }?.sortedBy { it.name }.orEmpty()
+            for (finishFile in finishRequests) {
+                val finish = runCatching { JSONObject(finishFile.readText()) }.getOrNull() ?: continue
+                if (!finish.optBoolean("prepararTableros")) continue
+                val taskId = finish.optInt("tareaId")
+                val technicianId = finish.optInt("tecnicoId")
+                runCatching {
+                    val drafts = com.aring.movil.data.panel.TableroDraftStore.listar(taskId, technicianId)
+                    require(drafts.size <= 100) { "Una tarea no puede tener más de 100 tableros." }
+                    require(finish.optInt("cantidadTableros", drafts.size) <= 100) { "Una tarea no puede tener más de 100 tableros." }
+                    require(drafts.all { it.terminado }) { "Hay tableros sin completar; no se puede finalizar la tarea." }
+                    val prepared = OfflineSync.tablerosPreparados(taskId)
+                    val total = drafts.size
+                    drafts.forEachIndexed { index, draft ->
+                        val operationId = if (draft.id == "legacy") "$taskId-${draft.tipo}-legacy" else draft.id
+                        if (operationId !in prepared) {
+                            val report = when (draft.tipo) {
+                                com.aring.movil.data.panel.TYPE_TRIFASICO -> com.aring.movil.data.panel.TableroDraftStore
+                                    .cargarTrifasico(taskId, draft.id, technicianId)?.let {
+                                        com.aring.movil.data.panel.TableroRepository.buildTrifasico(taskId, technicianId, it)
+                                    }
+                                com.aring.movil.data.panel.TYPE_MONOFASICO -> com.aring.movil.data.panel.TableroDraftStore
+                                    .cargarMonofasico(taskId, draft.id, technicianId)?.let {
+                                        com.aring.movil.data.panel.TableroRepository.buildMonofasico(taskId, technicianId, it)
+                                    }
+                                else -> null
+                            } ?: error("No se pudo recuperar el tablero ${index + 1}.")
+                            report.put("clientOperationId", operationId)
+                            OfflineSync.guardarInforme(taskId, OfflineSync.credenciales(technicianId)
+                                ?: error("No hay credenciales guardadas para el técnico."), report,
+                                deferUntilFinalization = true, programarSincronizacion = false)
+                            OfflineSync.registrarTableroPreparado(taskId, operationId)
+                        }
+                        setProgressAsync(androidx.work.workDataOf("tareaId" to taskId, "fase" to "PREPARACION", "actual" to index + 1, "total" to total))
+                    }
+                    finish.put("prepararTableros", false)
+                    val tmp = File(finishFile.parentFile, finishFile.name + ".tmp")
+                    tmp.writeText(finish.toString())
+                    if (!tmp.renameTo(finishFile)) { finishFile.delete(); check(tmp.renameTo(finishFile)) }
+                    setProgressAsync(androidx.work.workDataOf("tareaId" to taskId, "fase" to "ENVIO", "total" to total))
+                }.onFailure { e ->
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    falloAlgo = true
+                    OfflineSync.registrarError((e as? ApiException)?.message ?: e.message ?: "No se pudieron preparar los informes de la tarea.")
+                }
+            }
+
             val reports = directory.listFiles { f -> f.name.startsWith("report-") }?.sortedBy { it.name }.orEmpty()
             for (file in reports) {
                 // Un fallo en un informe no debe abortar el resto: cada archivo se procesa por separado.
                 runCatching {
                     val item = JSONObject(file.readText())
                     val taskId = item.getInt("tareaId")
+                    val finishRequest = File(directory, "finish-$taskId.json")
+                    if (finishRequest.exists() && runCatching { JSONObject(finishRequest.readText()).optBoolean("prepararTableros") }.getOrDefault(false)) return@runCatching
                     if (item.optBoolean("deferUntilFinalization") && !File(directory, "finish-$taskId.json").exists()) return@runCatching
                     if (File(directory, "start-$taskId.json").exists()) return@runCatching
                     val tecnicoId = item.getInt("tecnicoId")
@@ -221,6 +307,10 @@ class OfflineSyncWorker(context: Context, params: WorkerParameters) : Worker(con
                 runCatching {
                     val item = JSONObject(file.readText())
                     val tareaId = item.getInt("tareaId")
+                    if (item.optBoolean("prepararTableros")) {
+                        falloAlgo = true
+                        return@runCatching
+                    }
                     if (tareaId in rejectedTaskIds || tareaId in pendingReportTaskIds || tareaId in pendingStartTaskIds) {
                         falloAlgo = true
                         OfflineSync.registrarError(if (tareaId in rejectedTaskIds)
@@ -235,6 +325,7 @@ class OfflineSyncWorker(context: Context, params: WorkerParameters) : Worker(con
                     ApiService.token = token
                     kotlinx.coroutines.runBlocking { ApiService.cambiarEstadoTarea(tareaId, "FINALIZADA") }
                     file.delete()
+                    File(directory, "prepare-$tareaId.json").delete()
                     com.aring.movil.data.panel.TableroDraftStore.limpiarTarea(tareaId, tecnicoId)
                 }.onFailure { e ->
                     if (e is kotlinx.coroutines.CancellationException) throw e

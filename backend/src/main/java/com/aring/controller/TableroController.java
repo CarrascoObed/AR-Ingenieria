@@ -1,6 +1,7 @@
 package com.aring.controller;
 
 import com.aring.dto.InformeTableroDto;
+import com.aring.dto.TableroNombreDto;
 import com.aring.dto.TableroRequest;
 import com.aring.security.JwtUtil;
 import com.aring.service.TableroService;
@@ -37,6 +38,11 @@ public class TableroController {
     @GetMapping
     public List<InformeTableroDto> listar(@PathVariable Long tareaId) {
         return tableroService.listarPorTarea(tareaId);
+    }
+
+    @GetMapping("/nombres")
+    public List<TableroNombreDto> listarNombres(@PathVariable Long tareaId) {
+        return tableroService.listarNombresPorTarea(tareaId);
     }
 
     private Long tecnicoIdDeToken(String authorization) {

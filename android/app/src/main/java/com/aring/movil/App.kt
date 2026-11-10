@@ -42,9 +42,6 @@ import com.aring.movil.data.Tarea
 import com.aring.movil.data.Tecnico
 import com.aring.movil.data.inicialesDe
 import com.aring.movil.data.panel.TableroDraftStore
-import com.aring.movil.data.panel.TableroRepository
-import com.aring.movil.data.panel.TYPE_MONOFASICO
-import com.aring.movil.data.panel.TYPE_TRIFASICO
 import com.aring.movil.data.panel.newId
 import com.aring.movil.ui.components.BannerError
 import com.aring.movil.ui.components.BarraNavegacion
@@ -144,6 +141,7 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
     var tareaFinalizarId by rememberSaveable { mutableIntStateOf(0) }
     var segundosRestantes by rememberSaveable { mutableIntStateOf(60) }
     var errorFinalizar by remember { mutableStateOf("") }
+    var progresoCierre by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     fun refrescarTecnico() {
@@ -206,8 +204,23 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
     // el chip "Pendiente de sincronizar" desaparece y la tarea pasa a Finalizada sin acciones del usuario.
     DisposableEffect(tecnico.id) {
         val observador = Observer<List<WorkInfo>> { estados ->
-            if (estados != null && estados.any { it.state.isFinished }) {
-                refrescarTecnico()
+            if (estados != null) {
+                val progreso = estados.asSequence().mapNotNull { info ->
+                    val data = info.progress
+                    val taskId = data.getInt("tareaId", 0)
+                    val actual = data.getInt("actual", 0)
+                    val total = data.getInt("total", 0)
+                    val fase = data.getString("fase")
+                    if (taskId != tareaFinalizarId) null
+                    else if (fase == "ENVIO") "Informes preparados; esperando confirmación del servidor…"
+                    else if (total > 0) "Preparando informes: $actual de $total"
+                    else null
+                }.firstOrNull()
+                if (progreso != null) progresoCierre = progreso
+                if (estados.isNotEmpty() && estados.all { it.state.isFinished }) {
+                    progresoCierre = ""
+                    refrescarTecnico()
+                }
             }
         }
         val live = WorkManager.getInstance(context.applicationContext)
@@ -296,7 +309,15 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                         tarea = tarea,
                         borradores = TableroDraftStore.listar(tarea.id),
                         puedeFinalizar = !tarea.esInvitado(tecnico.id),
-                        onSeleccionarTipo = { tipo -> pantalla = PantallaTec.FlujoTablero(p.tarea, tipo, newId()) },
+                        onSeleccionarTipo = { tipo ->
+                            val cantidad = maxOf(tarea.tablerosRealizados, TableroDraftStore.listar(tarea.id).size)
+                            if (cantidad >= 100) {
+                                errorFinalizar = "Esta tarea alcanzó el límite de 100 tableros."
+                            } else {
+                                errorFinalizar = ""
+                                pantalla = PantallaTec.FlujoTablero(p.tarea, tipo, newId())
+                            }
+                        },
                         onEditar = { borrador -> pantalla = PantallaTec.FlujoTablero(p.tarea, borrador.tipo, borrador.id) },
                         onEliminar = { tablero -> TableroDraftStore.limpiar(tarea.id, tablero.tipo, tablero.id) },
                         onFinalizar = {
@@ -321,6 +342,7 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                 )
                 is PantallaTec.Confirmacion -> TableroConfirmacion(
                     tarea = tareaActual(p.tarea),
+                    progreso = progresoCierre,
                     onVolverATareas = {
                         volver()
                     }
@@ -376,32 +398,26 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                             errorFinalizar = "Hay inspecciones sin completar. Seleccione el tipo de tablero correspondiente para continuar y terminar su registro antes de cerrar la tarea."
                             return@launch
                         }
-                        val cierreYaPendiente = OfflineSync.pendiente(tareaFinalizarId)
-                        borradores.forEach { borrador ->
-                            val informe = withContext(Dispatchers.Default) {
-                                when (borrador.tipo) {
-                                    TYPE_TRIFASICO -> TableroDraftStore.cargarTrifasico(tareaFinalizarId, borrador.id)?.let { TableroRepository.buildTrifasico(tareaFinalizarId, tecnico.id, it) }
-                                    TYPE_MONOFASICO -> TableroDraftStore.cargarMonofasico(tareaFinalizarId, borrador.id)?.let { TableroRepository.buildMonofasico(tareaFinalizarId, tecnico.id, it) }
-                                    else -> null
-                                }
-                            } ?: error("No se pudo recuperar uno de los tableros guardados.")
-                            withContext(Dispatchers.IO) { OfflineSync.guardarInforme(tareaFinalizarId, tecnico, informe, deferUntilFinalization = true) }
+                        if (maxOf(tarea.tablerosRealizados, borradores.size) > 100) {
+                            errorFinalizar = "Esta tarea supera el límite de 100 tableros. Revise los registros antes de finalizar."
+                            return@launch
                         }
-                        OfflineSync.finalizar(tareaFinalizarId, tecnico)
+                        progresoCierre = "Preparando informes en segundo plano…"
+                        withContext(Dispatchers.IO) {
+                            OfflineSync.finalizarDesdeTableros(tareaFinalizarId, tecnico, borradores.size)
+                        }
                         val actualizada = Repositorio.tareas.firstOrNull { it.id == tareaFinalizarId } ?: tarea
                         val finalLocal = actualizada.copy(
                             estado = "Finalizada",
                             sincronizacionPendiente = true,
-                            tablerosRealizados = maxOf(
-                                actualizada.tablerosRealizados,
-                                tarea.tablerosRealizados + if (cierreYaPendiente) 0 else borradores.size
-                            )
+                            tablerosRealizados = maxOf(actualizada.tablerosRealizados, tarea.tablerosRealizados, borradores.size)
                         )
                         val index = Repositorio.tareas.indexOfFirst { it.id == tareaFinalizarId }
                         if (index >= 0) Repositorio.tareas[index] = finalLocal
                         OfflineTaskCache.save(tecnico.id, Repositorio.tareas.toList())
                         pantalla = PantallaTec.Confirmacion(finalLocal)
                     } catch (e: Exception) {
+                        progresoCierre = ""
                         errorFinalizar = e.message ?: "No se pudo guardar la finalización en el dispositivo."
                         pantalla = if (tarea != null) {
                             PantallaTec.SeleccionTablero(tarea)

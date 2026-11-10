@@ -30,11 +30,13 @@ import com.aring.movil.ui.panel.common.Spacing8
 @Composable
 fun MonofasicoRegistroScreen(
     vm: MonofasicoViewModel,
+    nombresServidor: List<Pair<String, String?>> = emptyList(),
     onNext: () -> Unit,
     onBack: () -> Unit
 ) {
     val state by vm.state.collectAsState()
     var error by remember { mutableStateOf<String?>(null) }
+    val descripcionDuplicada = vm.descripcionDuplicada(state.registration.descripcion, nombresServidor)
 
     PhaseScreen(
         step = 1,
@@ -43,18 +45,23 @@ fun MonofasicoRegistroScreen(
         content = {
             SectionTitle("Registro de mantenimiento preventivo")
             Spacing16()
-            FormTextField("Descripción", state.registration.descripcion) { vm.setDescripcion(it) }
+            FormTextField("Descripción", state.registration.descripcion) {
+                error = null
+                vm.setDescripcion(it)
+            }
             Spacing12()
             FormTextField("Ubicación", state.registration.ubicacion) { vm.setUbicacion(it) }
             Spacing12()
             FormTextField("Piso", state.registration.nivel, keyboardType = KeyboardType.Number) { vm.setNivel(it) }
             Spacing16()
-            ErrorBanner(error)
+            ErrorBanner(error ?: if (descripcionDuplicada) "Ya existe un tablero con esta descripción en la tarea." else null)
         },
         footer = {
             PrimaryButton("Siguiente") {
-                val result = vm.validate(1)
-                if (result.valid) onNext() else error = result.message
+                if (!descripcionDuplicada) {
+                    val result = vm.validate(1)
+                    if (result.valid) onNext() else error = result.message
+                }
             }
         }
     )
