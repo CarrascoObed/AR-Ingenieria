@@ -529,8 +529,8 @@ public class DocumentoService {
 
         saltoPagina(document);
         tituloSeccion(document, "3.3 Pautas de revisión para tableros");
-        for (InformeTablero informe : informes) {
-            agregarSeccionTablero(document, tarea, informe);
+        for (int i = 0; i < informes.size(); i++) {
+            agregarSeccionTablero(document, tarea, informes.get(i), i + 1);
         }
 
         tituloSeccion(document, "4. Levantamiento, valorización y condiciones de pago.");
@@ -721,32 +721,271 @@ public class DocumentoService {
         }
     }
 
-    private void agregarSeccionTablero(XWPFDocument document, Tarea tarea, InformeTablero informe) {
-        String nombreTablero = nombreTablero(informe);
-        tituloSubseccion(document, "Tablero: " + nombreTablero);
+    private void agregarSeccionTablero(XWPFDocument document, Tarea tarea, InformeTablero informe,
+                                       int numeroTablero) {
+        String descripcion = texto(informe.getDescripcion()).isBlank()
+                ? "Tablero sin nombre"
+                : texto(informe.getDescripcion());
+        tituloTablero(document, "Tablero " + numeroTablero);
 
         agregarTablaDatos(document, new String[][] {
-                {"Técnico", responsableMantenimiento(informe, tarea)},
-                {"Ayudante(s)", ayudantesTarea(tarea)},
+                {"Descripción", descripcion},
+                {"Ubicación", valorOTexto(informe.getUbicacion(), "Sin ubicación registrada")},
+                {"Nivel", valorOTexto(informe.getNivel(), "Sin nivel registrado")},
+                {"Técnicos", equipoTecnicoTarea(tarea)},
         });
 
-        tituloSubseccion(document, "Detalles");
-        List<ObservacionTablero> observaciones = new ArrayList<>(informe.getObservaciones());
-        observaciones.sort(Comparator.comparingInt(ObservacionTablero::getOrden));
-        if (observaciones.isEmpty()) {
-            parrafoCuerpo(document, "Sin observaciones registradas.");
-        } else {
-            for (ObservacionTablero observacion : observaciones) {
-                parrafoListaConGuion(document, observacion.getTexto());
-            }
-        }
+        agregarTablaMediciones(document, informe);
+        agregarTablaChecklist(document, informe);
+        agregarObservacionesTablero(document, informe);
 
         List<FotoInforme> fotosTablero = fotosNoTermograficas(informe);
         if (!fotosTablero.isEmpty()) {
-            agregarLineasEnBlanco(document, 3);
+            tituloBloqueTablero(document, "Respaldo fotográfico del tablero");
             agregarGaleria(document, fotosTablero, 6, 2.8, 4.98);
-            agregarLineasEnBlanco(document, 3);
         }
+    }
+
+    private void agregarTablaMediciones(XWPFDocument document, InformeTablero informe) {
+        tituloBloqueTablero(document, "Variables medidas");
+        List<MedicionTablero> mediciones = new ArrayList<>(informe.getMediciones());
+        mediciones.sort(Comparator.comparingLong(m -> m.getId() == null ? 0L : m.getId()));
+
+        XWPFTable tabla = crearTablaFichaTablero(document, mediciones.size() + 1);
+        agregarFilaCabeceraFicha(tabla.getRow(0), "Variable medida", "Medición");
+        if (mediciones.isEmpty()) {
+            agregarFilaFicha(tabla.getRow(1), "Sin mediciones registradas", "—", 0, null);
+            return;
+        }
+
+        for (int i = 0; i < mediciones.size(); i++) {
+            MedicionTablero medicion = mediciones.get(i);
+            String variable = texto(medicion.getLabel());
+            if (!texto(medicion.getUnit()).isBlank()) {
+                variable += " (" + texto(medicion.getUnit()) + ")";
+            }
+            String valor = texto(medicion.getValor()).trim();
+            if (valor.isBlank()) {
+                valor = "Sin registro";
+            } else if (!texto(medicion.getUnit()).isBlank() && !valorIncluyeUnidad(valor, medicion.getUnit())) {
+                valor += " " + texto(medicion.getUnit());
+            }
+            agregarFilaFicha(tabla.getRow(i + 1), variable, valor, i, null);
+        }
+    }
+
+    private void agregarTablaChecklist(XWPFDocument document, InformeTablero informe) {
+        tituloBloqueTablero(document, "Checklist de inspección");
+        List<ChecklistTablero> checklist = new ArrayList<>(informe.getChecklist());
+        checklist.sort(Comparator.comparingLong(item -> item.getId() == null ? 0L : item.getId()));
+
+        XWPFTable tabla = crearTablaFichaTablero(document, checklist.size() + 1);
+        agregarFilaCabeceraFicha(tabla.getRow(0), "Punto revisado", "Resultado");
+        if (checklist.isEmpty()) {
+            agregarFilaFicha(tabla.getRow(1), "Sin puntos de checklist registrados", "—", 0, null);
+            return;
+        }
+
+        for (int i = 0; i < checklist.size(); i++) {
+            ChecklistTablero item = checklist.get(i);
+            String estado = estadoChecklist(item.getStatus());
+            String fondoEstado = switch (estado) {
+                case "OK" -> "E5F4EA";
+                case "C/R" -> "FFF1D6";
+                case "N/A" -> "EEF0F4";
+                default -> "F7F6FC";
+            };
+            String colorEstado = switch (estado) {
+                case "OK" -> "187443";
+                case "C/R" -> "9A5B00";
+                case "N/A" -> "626B7A";
+                default -> "333333";
+            };
+            agregarFilaFicha(tabla.getRow(i + 1), texto(item.getLabel()), estado, i,
+                    observacionChecklist(informe, item), fondoEstado, colorEstado);
+        }
+    }
+
+    private void agregarObservacionesTablero(XWPFDocument document, InformeTablero informe) {
+        tituloBloqueTablero(document, "Observaciones generales");
+        List<ChecklistTablero> checklist = new ArrayList<>(informe.getChecklist());
+        List<ObservacionTablero> observaciones = new ArrayList<>(informe.getObservaciones());
+        observaciones.sort(Comparator.comparingInt(ObservacionTablero::getOrden));
+        List<String> generales = observaciones.stream()
+                .map(observacion -> texto(observacion.getTexto()).trim())
+                .filter(texto -> !texto.isBlank())
+                .filter(texto -> checklist.stream().noneMatch(item -> esObservacionChecklist(texto, item)))
+                .toList();
+        if (generales.isEmpty()) {
+            parrafoCuerpo(document, "Sin observaciones generales registradas.");
+            return;
+        }
+        for (String observacion : generales) {
+            parrafoListaConGuion(document, observacion);
+        }
+    }
+
+    private XWPFTable crearTablaFichaTablero(XWPFDocument document, int filas) {
+        XWPFTable tabla = document.createTable(filas, 2);
+        tabla.setWidth("100%");
+        tabla.setTableAlignment(TableRowAlign.LEFT);
+        CTTblPr propiedades = tabla.getCTTbl().getTblPr();
+        propiedades.addNewTblLayout().setType(STTblLayoutType.FIXED);
+
+        CTTblCellMar margenes = propiedades.addNewTblCellMar();
+        margenes.addNewTop().setW(BigInteger.valueOf(55));
+        margenes.addNewBottom().setW(BigInteger.valueOf(55));
+        margenes.addNewLeft().setW(BigInteger.valueOf(110));
+        margenes.addNewRight().setW(BigInteger.valueOf(110));
+
+        CTTblBorders bordes = propiedades.addNewTblBorders();
+        for (CTBorder borde : List.of(
+                bordes.addNewTop(), bordes.addNewLeft(), bordes.addNewBottom(), bordes.addNewRight(),
+                bordes.addNewInsideH(), bordes.addNewInsideV())) {
+            borde.setVal(STBorder.SINGLE);
+            borde.setSz(BigInteger.valueOf(4));
+            borde.setColor("C9CFE0");
+        }
+        return tabla;
+    }
+
+    private void agregarFilaCabeceraFicha(XWPFTableRow fila, String titulo1, String titulo2) {
+        fila.getCtRow().addNewTrPr().addNewCantSplit();
+        configurarCeldaFicha(fila.getCell(0), titulo1, "4B2495", "FFFFFF", true, false, "6500", null);
+        configurarCeldaFicha(fila.getCell(1), titulo2, "4B2495", "FFFFFF", true, true, "2545", null);
+    }
+
+    private void agregarFilaFicha(XWPFTableRow fila, String valor1, String valor2, int indice,
+                                  String observacion) {
+        agregarFilaFicha(fila, valor1, valor2, indice, observacion, null, null);
+    }
+
+    private void agregarFilaFicha(XWPFTableRow fila, String valor1, String valor2, int indice,
+                                  String observacion, String fondoResultado, String colorResultado) {
+        fila.getCtRow().addNewTrPr().addNewCantSplit();
+        String fondoFila = indice % 2 == 0 ? "FFFFFF" : "F7F6FC";
+        configurarCeldaFicha(fila.getCell(0), valor1, fondoFila, "333333", false, false, "6500", observacion);
+        configurarCeldaFicha(fila.getCell(1), valor2,
+                fondoResultado == null ? fondoFila : fondoResultado,
+                colorResultado == null ? "333333" : colorResultado,
+                fondoResultado != null, true, "2545", null);
+    }
+
+    private void configurarCeldaFicha(XWPFTableCell celda, String valor, String fondo, String colorTexto,
+                                      boolean negrita, boolean centrar, String ancho, String observacion) {
+        celda.setWidth(ancho);
+        celda.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
+        sombrearCelda(celda, fondo);
+        XWPFParagraph parrafo = celda.getParagraphs().isEmpty() ? celda.addParagraph() : celda.getParagraphs().get(0);
+        parrafo.setSpacingBefore(25);
+        parrafo.setSpacingAfter(25);
+        if (centrar) {
+            parrafo.setAlignment(ParagraphAlignment.CENTER);
+        }
+        XWPFRun run = parrafo.createRun();
+        run.setText(valor == null || valor.isBlank() ? "—" : valor);
+        run.setFontFamily("Arial");
+        run.setFontSize(9);
+        run.setBold(negrita);
+        run.setColor(colorTexto);
+
+        if (observacion != null && !observacion.isBlank()) {
+            XWPFParagraph detalle = celda.addParagraph();
+            detalle.setSpacingBefore(0);
+            detalle.setSpacingAfter(25);
+            XWPFRun nota = detalle.createRun();
+            nota.setText("Observación C/R: " + observacion);
+            nota.setFontFamily("Arial");
+            nota.setFontSize(8);
+            nota.setColor("626B7A");
+        }
+    }
+
+    private String observacionChecklist(InformeTablero informe, ChecklistTablero item) {
+        return informe.getObservaciones().stream()
+                .sorted(Comparator.comparingInt(ObservacionTablero::getOrden))
+                .map(observacion -> texto(observacion.getTexto()).trim())
+                .filter(observacion -> esObservacionChecklist(observacion, item))
+                .map(observacion -> observacion.substring(texto(item.getLabel()).trim().length() + 1).trim())
+                .filter(observacion -> !observacion.isBlank())
+                .reduce((primera, siguiente) -> primera + " · " + siguiente)
+                .orElse(null);
+    }
+
+    private boolean esObservacionChecklist(String observacion, ChecklistTablero item) {
+        String etiqueta = texto(item.getLabel()).trim();
+        return !etiqueta.isBlank()
+                && observacion.regionMatches(true, 0, etiqueta + ":", 0, etiqueta.length() + 1);
+    }
+
+    private String estadoChecklist(String estado) {
+        String normalizado = texto(estado).trim().toUpperCase(Locale.ROOT).replace(" ", "");
+        return switch (normalizado) {
+            case "OK" -> "OK";
+            case "CR", "C/R" -> "C/R";
+            case "NA", "N/A" -> "N/A";
+            default -> normalizado.isBlank() ? "—" : normalizado;
+        };
+    }
+
+    private boolean valorIncluyeUnidad(String valor, String unidad) {
+        String normalizado = valor.toLowerCase(Locale.ROOT).replace(" ", "");
+        String unidadNormalizada = texto(unidad).toLowerCase(Locale.ROOT).replace(" ", "");
+        return switch (unidadNormalizada) {
+            case "amp", "a", "ma", "amp/mamp" -> normalizado.endsWith("amp")
+                    || normalizado.endsWith("ma") || normalizado.endsWith("a");
+            case "v", "volt", "volts" -> normalizado.endsWith("v") || normalizado.endsWith("volt");
+            case "°c", "c", "celsius" -> normalizado.endsWith("°c") || normalizado.endsWith("celsius");
+            default -> normalizado.endsWith(unidadNormalizada);
+        };
+    }
+
+    private String equipoTecnicoTarea(Tarea tarea) {
+        List<String> nombres = new ArrayList<>();
+        if (tarea.getTecnicoCabecera() != null) {
+            agregarNombreTecnico(nombres, tarea.getTecnicoCabecera());
+        }
+        for (Tecnico tecnico : tarea.getTecnicosInvitados()) {
+            agregarNombreTecnico(nombres, tecnico);
+        }
+        return nombres.isEmpty() ? "Sin técnicos registrados" : String.join(" · ", nombres);
+    }
+
+    private void agregarNombreTecnico(List<String> nombres, Tecnico tecnico) {
+        String nombre = (texto(tecnico.getNombre()) + " " + texto(tecnico.getApellido())).trim();
+        if (!nombre.isBlank() && !nombres.contains(nombre)) {
+            nombres.add(nombre);
+        }
+    }
+
+    private String valorOTexto(String valor, String respaldo) {
+        return texto(valor).isBlank() ? respaldo : texto(valor);
+    }
+
+    private void tituloTablero(XWPFDocument document, String texto) {
+        XWPFParagraph parrafo = document.createParagraph();
+        parrafo.setSpacingBefore(180);
+        parrafo.setSpacingAfter(60);
+        parrafo.setKeepNext(true);
+        XWPFRun run = parrafo.createRun();
+        run.setText(texto);
+        run.setBold(true);
+        run.setFontFamily("Arial");
+        run.setFontSize(13);
+        run.setColor("4B2495");
+    }
+
+    private void tituloBloqueTablero(XWPFDocument document, String texto) {
+        XWPFParagraph parrafo = document.createParagraph();
+        parrafo.setSpacingBefore(120);
+        parrafo.setSpacingAfter(50);
+        parrafo.setKeepNext(true);
+        XWPFRun run = parrafo.createRun();
+        run.setText(texto);
+        run.setBold(true);
+        run.setFontFamily("Arial");
+        run.setFontSize(10);
+        run.setColor("4B2495");
     }
 
     private void agregarLineasEnBlanco(XWPFDocument document, int cantidad) {
