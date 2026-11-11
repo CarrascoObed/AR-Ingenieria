@@ -98,10 +98,6 @@ public class DocumentoService {
             .ofPattern("MMMM 'del' yyyy", new Locale("es", "CL"))
             .withZone(ZoneId.of("America/Santiago"));
 
-    private static final DateTimeFormatter FORMATO_SANTIAGO_MES_ANO = DateTimeFormatter
-            .ofPattern("'Santiago, 'MMMM yyyy", new Locale("es", "CL"))
-            .withZone(ZoneId.of("America/Santiago"));
-
     private static final DateTimeFormatter FORMATO_ARCHIVO_MES_ANO = DateTimeFormatter
             .ofPattern("MMMM-yyyy", new Locale("es", "CL"))
             .withZone(ZoneId.of("America/Santiago"));
@@ -592,13 +588,9 @@ public class DocumentoService {
             agregarImagenPortada(document, edificio);
         }
 
-        Tecnico cabecera = tarea.getTecnicoCabecera();
-        if (cabecera != null) {
-            subtituloPortada(document, "Elaborado por " + cabecera.getNombre() + " " + cabecera.getApellido(), false);
-        }
-        if (fechaCierre != null) {
-            subtituloPortada(document, FORMATO_SANTIAGO_MES_ANO.format(fechaCierre), false);
-        }
+        subtituloPortada(document, "Elaborado por Luis Rojas Liberona", false);
+        subtituloPortada(document, "Licencia SEC: 17.566.330", false);
+        subtituloPortada(document, "Santiago, septiembre 2026", false);
     }
 
     private void tituloPortada(XWPFDocument document, String valor, int tamano) {
