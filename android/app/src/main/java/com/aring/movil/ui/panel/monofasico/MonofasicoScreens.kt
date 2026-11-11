@@ -90,12 +90,12 @@ fun MonofasicoEvidenciasPreviasScreen(
         topBarTitle = "Evidencias previas",
         content = {
             SectionTitle("Evidencias previas")
-            SectionSubtitle("Capture las 2 evidencias fotográficas del estado actual del tablero.")
+            SectionSubtitle("Capture una foto del estado inicial del tablero. Puede agregar todas las evidencias adicionales que necesite.")
             Spacing16()
             state.previousPhotos.forEach { slot ->
                 PhotoSlotCard(
                     title = "Evidencia previa ${slot.index}",
-                    subtitle = "Obligatoria",
+                    subtitle = if (slot.index == 1) "Foto base obligatoria" else "Foto adicional",
                     path = slot.path,
                     onTakePhoto = {
                         openCamera(2, PhotoBus.CATEGORY_PREVIOUS, null, slot.index, "Evidencia previa ${slot.index}")
@@ -111,6 +111,11 @@ fun MonofasicoEvidenciasPreviasScreen(
                 )
                 Spacing12()
             }
+            PrimaryButton("Agregar foto") {
+                val nextIndex = (state.previousPhotos.maxOfOrNull { it.index } ?: 0) + 1
+                openCamera(2, PhotoBus.CATEGORY_PREVIOUS, null, nextIndex, "Evidencia previa $nextIndex")
+            }
+            Spacing12()
             ErrorBanner(error)
         },
         footer = {
@@ -280,63 +285,6 @@ fun MonofasicoChecklistScreen(
 }
 
 @Composable
-fun MonofasicoEvidenciasPosterioresScreen(
-    vm: MonofasicoViewModel,
-    onNext: () -> Unit,
-    onBack: () -> Unit,
-    openCamera: OpenCamera
-) {
-    val state by vm.state.collectAsState()
-    var error by remember { mutableStateOf<String?>(null) }
-    var viewPhotoPath by remember { mutableStateOf<String?>(null) }
-
-    CollectPhotoResult { res ->
-        if (res.request.category == PhotoBus.CATEGORY_POST) {
-            vm.setPostPhoto(res.request.slotIndex, res.filePath)
-        }
-    }
-
-    PhaseScreen(
-        step = 5,
-        onBack = onBack,
-        topBarTitle = "Evidencias posteriores",
-        content = {
-            SectionTitle("Evidencias posteriores")
-            SectionSubtitle("Capture las 2 evidencias fotográficas al finalizar el mantenimiento.")
-            Spacing16()
-            state.postPhotos.forEach { slot ->
-                PhotoSlotCard(
-                    title = "Evidencia posterior ${slot.index}",
-                    subtitle = "Obligatoria",
-                    path = slot.path,
-                    onTakePhoto = {
-                        openCamera(5, PhotoBus.CATEGORY_POST, null, slot.index, "Evidencia posterior ${slot.index}")
-                    },
-                    onViewPhoto = { slot.path?.let { viewPhotoPath = it } },
-                    onRetakePhoto = {
-                        openCamera(5, PhotoBus.CATEGORY_POST, null, slot.index, "Evidencia posterior ${slot.index}")
-                    },
-                    onPhotoEdited = { nuevaRuta ->
-                        vm.setPostPhoto(slot.index, nuevaRuta)
-                    },
-                    onPhotoDeleted = { vm.setPostPhoto(slot.index, null) }
-                )
-                Spacing12()
-            }
-            ErrorBanner(error)
-        },
-        footer = {
-            PrimaryButton("Siguiente") {
-                val result = vm.validate(5)
-                if (result.valid) onNext() else error = result.message
-            }
-        }
-    )
-
-    viewPhotoPath?.let { PhotoViewerDialog(path = it, onDismiss = { viewPhotoPath = null }) }
-}
-
-@Composable
 fun MonofasicoObservacionesScreen(
     vm: MonofasicoViewModel,
     onBack: () -> Unit,
@@ -349,7 +297,7 @@ fun MonofasicoObservacionesScreen(
     }
 
     PhaseScreen(
-        step = 6,
+        step = 5,
         onBack = onBack,
         topBarTitle = "Observaciones",
         content = {

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import {
   ClipboardList,
   Download,
-  FileSpreadsheet,
   FileText,
   KeyRound,
   Loader2,
@@ -147,8 +146,8 @@ function SeccionInformes() {
         <FileText size={18} style={{ verticalAlign: -3 }} color="var(--violeta)" /> Informes
       </h3>
       <p className="descripcion">
-        Busca el edificio, selecciona el mantenimiento finalizado y descarga su rendición en Excel o
-        el informe en Word.
+        Busca el edificio, selecciona el mantenimiento finalizado y descarga su informe Word y
+        rendición Excel juntos en un archivo ZIP.
       </p>
 
       {error && <div className="error-banner">{error}</div>}
@@ -229,7 +228,7 @@ function SeccionInformes() {
             <p className="descripcion">Cargando mantenimientos…</p>
           ) : tareasEdificio.length ? (
             <>
-              <p className="descripcion">Selecciona un mantenimiento para descargar sus archivos.</p>
+              <p className="descripcion">Selecciona un mantenimiento para descargar juntos sus dos documentos.</p>
               <div className="lista-mantenimientos" role="radiogroup" aria-label="Mantenimientos del edificio">
                 {tareasEdificio.map((tarea) => (
                   <label
@@ -260,20 +259,12 @@ function SeccionInformes() {
 
       <div className="fila-descarga">
         <button
-          className="btn btn-secundario"
-          onClick={() => descargar('/documentos/finalizadas.xlsx', nombreAlternativo('.xlsx'))}
-          disabled={!tareaSeleccionada || descargando === '/documentos/finalizadas.xlsx'}
-        >
-          <FileSpreadsheet size={18} />
-          {descargando === '/documentos/finalizadas.xlsx' ? 'Descargando…' : 'Descargar Rendición de servicios'}
-        </button>
-        <button
-          className="btn btn-secundario"
-          onClick={() => descargar('/documentos/finalizadas.docx', nombreAlternativo('.docx'))}
-          disabled={!tareaSeleccionada || descargando === '/documentos/finalizadas.docx'}
+          className="btn btn-primario"
+          onClick={() => descargar('/documentos/finalizada.zip', nombreAlternativo('.zip'))}
+          disabled={!tareaSeleccionada || descargando === '/documentos/finalizada.zip'}
         >
           <Download size={18} />
-          {descargando === '/documentos/finalizadas.docx' ? 'Descargando…' : 'Descargar Informe'}
+          {descargando === '/documentos/finalizada.zip' ? 'Preparando documentos…' : 'Descargar ambos (ZIP)'}
         </button>
       </div>
     </section>

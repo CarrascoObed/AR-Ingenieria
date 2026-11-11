@@ -110,6 +110,14 @@ public class DocumentoController {
         return descargar(bytes, nombre, WORD_MEDIA_TYPE);
     }
 
+    @GetMapping("/finalizada.zip")
+    public ResponseEntity<byte[]> documentosTareaZip(@RequestParam("idTarea") String idTarea) {
+        byte[] bytes = documentoService.documentosTareaZip(idTarea);
+        String nombre = nombreArchivo(documentoService.datosArchivoTarea(idTarea), ".zip",
+                "documentos-tarea.zip");
+        return descargar(bytes, nombre, "application/zip");
+    }
+
     @GetMapping("/informe-tarea.docx")
     public ResponseEntity<byte[]> informeTareaWord(@RequestParam("tareaId") Long tareaId) {
         DocumentoService.InformeTarea informe = documentoService.informeTareaWord(tareaId);

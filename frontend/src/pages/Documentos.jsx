@@ -231,7 +231,7 @@ export default function Documentos() {
         </h3>
         <p className="descripcion">
           Filtra por edificio, técnico, dirección o fecha de finalización. Puedes combinar varios
-          criterios y luego elegir el informe que necesitas.
+          criterios y luego descarga el informe Word y la rendición Excel juntos en un archivo ZIP.
         </p>
         <form onSubmit={buscarInformes}>
           <div className="fila">
@@ -339,7 +339,7 @@ export default function Documentos() {
               <p className="descripcion">Cargando mantenimientos…</p>
             ) : tareasEdificio.length ? (
               <>
-                <p className="descripcion">Selecciona una tarea para habilitar sus descargas.</p>
+                <p className="descripcion">Selecciona una tarea para descargar juntos sus dos documentos.</p>
                 <div className="lista-mantenimientos" role="radiogroup" aria-label="Mantenimientos del edificio">
                   {tareasEdificio.map((tarea) => (
                     <label
@@ -371,30 +371,16 @@ export default function Documentos() {
 
         <div className="fila-descarga">
           <button
-            className="btn btn-secundario"
+            className="btn btn-primario"
             onClick={() => tareaSeleccionada && descargar(
-              '/documentos/finalizadas.xlsx',
-              nombreAlternativo(tareaSeleccionada, '.xlsx'),
+              '/documentos/finalizada.zip',
+              nombreAlternativo(tareaSeleccionada, '.zip'),
               { idTarea: tareaSeleccionada.codigo }
             )}
-            disabled={!tareaSeleccionada || descargando === '/documentos/finalizadas.xlsx'}
-          >
-            <FileSpreadsheet size={18} />
-            {descargando === '/documentos/finalizadas.xlsx'
-              ? 'Descargando…'
-              : 'Descargar Rendición de servicios'}
-          </button>
-          <button
-            className="btn btn-secundario"
-            onClick={() => tareaSeleccionada && descargar(
-              '/documentos/finalizadas.docx',
-              nombreAlternativo(tareaSeleccionada, '.docx'),
-              { idTarea: tareaSeleccionada.codigo }
-            )}
-            disabled={!tareaSeleccionada || descargando === '/documentos/finalizadas.docx'}
+            disabled={!tareaSeleccionada || descargando === '/documentos/finalizada.zip'}
           >
             <Download size={18} />
-            {descargando === '/documentos/finalizadas.docx' ? 'Descargando…' : 'Descargar Informe'}
+            {descargando === '/documentos/finalizada.zip' ? 'Preparando documentos…' : 'Descargar ambos (ZIP)'}
           </button>
         </div>
       </section>

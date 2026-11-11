@@ -10,7 +10,6 @@ object TrifasicoValidation {
         2 -> validateEvidenciasPrevias(state)
         3 -> validateVariables(state)
         4 -> validateChecklist(state)
-        5 -> validateEvidenciasPosteriores(state)
         else -> ValidationResult.ok()
     }
 
@@ -26,8 +25,8 @@ object TrifasicoValidation {
     }
 
     private fun validateEvidenciasPrevias(state: TrifasicoState): ValidationResult {
-        if (state.previousPhotos.any { it.path == null }) {
-            return ValidationResult.fail("Debe tomar las 2 evidencias previas (obligatorias)")
+        if (state.previousPhotos.none { it.path != null }) {
+            return ValidationResult.fail("Debe tomar al menos una evidencia previa")
         }
         return ValidationResult.ok()
     }
@@ -59,10 +58,4 @@ object TrifasicoValidation {
         return ValidationResult.ok()
     }
 
-    private fun validateEvidenciasPosteriores(state: TrifasicoState): ValidationResult {
-        if (state.postPhotos.any { it.path == null }) {
-            return ValidationResult.fail("Debe tomar las 2 evidencias posteriores (obligatorias)")
-        }
-        return ValidationResult.ok()
-    }
 }

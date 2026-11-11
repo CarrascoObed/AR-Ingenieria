@@ -20,14 +20,12 @@ import com.aring.movil.data.panel.TYPE_MONOFASICO
 import com.aring.movil.data.panel.TYPE_TRIFASICO
 import com.aring.movil.data.panel.newId
 import com.aring.movil.ui.panel.monofasico.MonofasicoChecklistScreen
-import com.aring.movil.ui.panel.monofasico.MonofasicoEvidenciasPosterioresScreen
 import com.aring.movil.ui.panel.monofasico.MonofasicoEvidenciasPreviasScreen
 import com.aring.movil.ui.panel.monofasico.MonofasicoObservacionesScreen
 import com.aring.movil.ui.panel.monofasico.MonofasicoRegistroScreen
 import com.aring.movil.ui.panel.monofasico.MonofasicoVariablesScreen
 import com.aring.movil.ui.panel.monofasico.MonofasicoViewModel
 import com.aring.movil.ui.panel.trifasico.TrifasicoChecklistScreen
-import com.aring.movil.ui.panel.trifasico.TrifasicoEvidenciasPosterioresScreen
 import com.aring.movil.ui.panel.trifasico.TrifasicoEvidenciasPreviasScreen
 import com.aring.movil.ui.panel.trifasico.TrifasicoObservacionesScreen
 import com.aring.movil.ui.panel.trifasico.TrifasicoRegistroScreen
@@ -39,7 +37,6 @@ private sealed interface SubPantalla {
     data object EvidenciasPrevias : SubPantalla
     data object Variables : SubPantalla
     data object Checklist : SubPantalla
-    data object EvidenciasPosteriores : SubPantalla
     data object Observaciones : SubPantalla
     data object Camara : SubPantalla
 }
@@ -51,7 +48,7 @@ private val SubPantallaSaver = listSaver<SubPantalla, String>(
             "EvidenciasPrevias" -> SubPantalla.EvidenciasPrevias
             "Variables" -> SubPantalla.Variables
             "Checklist" -> SubPantalla.Checklist
-            "EvidenciasPosteriores" -> SubPantalla.EvidenciasPosteriores
+            "EvidenciasPosteriores" -> SubPantalla.Observaciones
             "Observaciones" -> SubPantalla.Observaciones
             "Camara" -> SubPantalla.Camara
             else -> SubPantalla.Registro
@@ -89,7 +86,6 @@ fun TableroFlujo(
             2 -> SubPantalla.EvidenciasPrevias
             3 -> SubPantalla.Variables
             4 -> SubPantalla.Checklist
-            5 -> SubPantalla.EvidenciasPosteriores
             else -> SubPantalla.Registro
         }
     }
@@ -99,7 +95,6 @@ fun TableroFlujo(
             2 -> SubPantalla.EvidenciasPrevias
             3 -> SubPantalla.Variables
             4 -> SubPantalla.Checklist
-            5 -> SubPantalla.EvidenciasPosteriores
             else -> SubPantalla.Registro
         }
         else -> sub
@@ -167,30 +162,12 @@ fun TableroFlujo(
             if (tipo == TYPE_TRIFASICO) {
                 TrifasicoChecklistScreen(
                     vm = trifasicoVm,
-                    onNext = { sub = SubPantalla.EvidenciasPosteriores },
-                    onBack = onVolver,
-                    openCamera = openCamera
-                )
-            } else {
-                MonofasicoChecklistScreen(
-                    vm = monofasicoVm,
-                    onNext = { sub = SubPantalla.EvidenciasPosteriores },
-                    onBack = onVolver,
-                    openCamera = openCamera
-                )
-            }
-        }
-
-        SubPantalla.EvidenciasPosteriores -> {
-            if (tipo == TYPE_TRIFASICO) {
-                TrifasicoEvidenciasPosterioresScreen(
-                    vm = trifasicoVm,
                     onNext = { sub = SubPantalla.Observaciones },
                     onBack = onVolver,
                     openCamera = openCamera
                 )
             } else {
-                MonofasicoEvidenciasPosterioresScreen(
+                MonofasicoChecklistScreen(
                     vm = monofasicoVm,
                     onNext = { sub = SubPantalla.Observaciones },
                     onBack = onVolver,

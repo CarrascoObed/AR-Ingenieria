@@ -55,6 +55,7 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblCellMar;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STBorder;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STOnOff;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STFldCharType;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblLayoutType;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblWidth;
@@ -356,6 +357,27 @@ public class DocumentoService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public byte[] documentosTareaZip(String codigo) {
+        List<Tarea> tareas = tareasFinalizadasConDatos(codigo, null, null);
+        if (tareas.size() != 1) {
+            throw new ApiException("No se encontró una única tarea finalizada para descargar.",
+                    org.springframework.http.HttpStatus.NOT_FOUND);
+        }
+        Tarea tarea = tareas.get(0);
+        String nombreBase = nombreBaseArchivoZip(tarea);
+        try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+             ZipOutputStream zip = new ZipOutputStream(bytes)) {
+            agregarEntradaZip(zip, nombreBase + ".xlsx", finalizadasExcel(tarea.getCodigo(), null, null));
+            agregarEntradaZip(zip, nombreBase + ".docx", informeTareaWord(tarea.getId()).bytes());
+            zip.finish();
+            return bytes.toByteArray();
+        } catch (Exception e) {
+            throw new ApiException("No se pudieron generar los documentos de la tarea: " + e.getMessage(),
+                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     private boolean fechaDentroDelPeriodo(Tarea tarea, int anio, Integer mes) {
         Instant fecha = fechaParaDocumento(tarea);
         if (fecha == null) {
@@ -533,8 +555,8 @@ public class DocumentoService {
 
         saltoPagina(document);
         tituloSeccion(document, "3.3 Pautas de revisión para tableros");
-        for (InformeTablero informe : informes) {
-            agregarSeccionTablero(document, tarea, informe);
+        for (int indice = 0; indice < informes.size(); indice++) {
+            agregarSeccionTablero(document, tarea, informes.get(indice), indice + 1);
         }
 
         tituloSeccion(document, "4. Levantamiento, valorización y condiciones de pago.");
@@ -729,14 +751,19 @@ public class DocumentoService {
         }
     }
 
-    private void agregarSeccionTablero(XWPFDocument document, Tarea tarea, InformeTablero informe) {
-        String nombreTablero = nombreTablero(informe);
-        tituloSubseccion(document, "Tablero: " + nombreTablero);
+    private void agregarSeccionTablero(XWPFDocument document, Tarea tarea, InformeTablero informe, int numeroTablero) {
+        String nombre = texto(informe.getDescripcion()).isBlank() ? "Sin nombre" : texto(informe.getDescripcion());
+        tituloSubseccion(document, "Tablero " + numeroTablero + " · " + nombre);
 
         agregarTablaDatos(document, new String[][] {
-                {"Técnico", responsableMantenimiento(informe, tarea)},
-                {"Ayudante(s)", ayudantesTarea(tarea)},
+                {"Ubicación", texto(informe.getUbicacion()).isBlank() ? "No registrada" : texto(informe.getUbicacion())},
+                {"Nivel", texto(informe.getNivel()).isBlank() ? "No registrado" : texto(informe.getNivel())},
+                {"Tipo de tablero", informe.getTipoTablero() == null ? "No registrado" : informe.getTipoTablero().getEtiqueta()},
+                {"Responsable del registro", responsableMantenimiento(informe, tarea)},
+                {"Equipo técnico de la tarea", equipoTecnicoTarea(tarea)},
         });
+
+        agregarTablaChecklist(document, informe);
 
         tituloSubseccion(document, "Detalles");
         List<ObservacionTablero> observaciones = new ArrayList<>(informe.getObservaciones());
@@ -754,6 +781,128 @@ public class DocumentoService {
             agregarLineasEnBlanco(document, 3);
             agregarGaleria(document, fotosTablero, 6, 2.8, 4.98);
             agregarLineasEnBlanco(document, 3);
+        }
+    }
+
+    private void agregarTablaChecklist(XWPFDocument document, InformeTablero informe) {
+        XWPFParagraph titulo = document.createParagraph();
+        titulo.setSpacingBefore(120);
+        titulo.setSpacingAfter(60);
+        XWPFRun tituloRun = titulo.createRun();
+        tituloRun.setText("Checklist de inspección");
+        tituloRun.setBold(true);
+        tituloRun.setFontFamily("Arial");
+        tituloRun.setFontSize(11);
+        tituloRun.setColor("4B2495");
+        titulo.setKeepNext(true);
+
+        List<ChecklistTablero> checklist = new ArrayList<>(informe.getChecklist());
+        checklist.sort(Comparator.comparingLong(item -> item.getId() == null ? 0L : item.getId()));
+        if (checklist.isEmpty()) {
+            parrafoCuerpo(document, "No hay puntos de checklist registrados para este tablero.");
+            return;
+        }
+
+        XWPFTable tabla = document.createTable(checklist.size() + 1, 2);
+        tabla.setWidth("100%");
+        tabla.setTableAlignment(TableRowAlign.LEFT);
+        CTTblPr tblPr = tabla.getCTTbl().getTblPr();
+        tblPr.addNewTblLayout().setType(STTblLayoutType.FIXED);
+
+        CTTblCellMar cellMar = tblPr.addNewTblCellMar();
+        cellMar.addNewTop().setW(BigInteger.valueOf(55));
+        cellMar.addNewBottom().setW(BigInteger.valueOf(55));
+        cellMar.addNewLeft().setW(BigInteger.valueOf(110));
+        cellMar.addNewRight().setW(BigInteger.valueOf(110));
+
+        CTTblBorders bordes = tblPr.addNewTblBorders();
+        for (CTBorder borde : List.of(
+                bordes.addNewTop(), bordes.addNewLeft(), bordes.addNewBottom(), bordes.addNewRight(),
+                bordes.addNewInsideH(), bordes.addNewInsideV())) {
+            borde.setVal(STBorder.SINGLE);
+            borde.setSz(BigInteger.valueOf(4));
+            borde.setColor("C9CFE0");
+        }
+
+        XWPFTableRow cabecera = tabla.getRow(0);
+        var propiedadesCabecera = cabecera.getCtRow().addNewTrPr();
+        propiedadesCabecera.addNewCantSplit();
+        propiedadesCabecera.addNewTblHeader().setVal(STOnOff.TRUE);
+        configurarCeldaChecklist(cabecera.getCell(0), "Punto revisado", "4B2495", "FFFFFF", true, false, "6500");
+        configurarCeldaChecklist(cabecera.getCell(1), "Resultado", "4B2495", "FFFFFF", true, true, "2545");
+
+        for (int i = 0; i < checklist.size(); i++) {
+            ChecklistTablero item = checklist.get(i);
+            XWPFTableRow fila = tabla.getRow(i + 1);
+            fila.getCtRow().addNewTrPr().addNewCantSplit();
+
+            XWPFTableCell celdaItem = fila.getCell(0);
+            configurarCeldaChecklist(celdaItem, texto(item.getLabel()), i % 2 == 0 ? "FFFFFF" : "F7F6FC",
+                    "333333", false, false, "6500");
+
+            String estado = estadoChecklist(item.getStatus());
+            String fondoEstado = switch (estado) {
+                case "OK" -> "E5F4EA";
+                case "C/R" -> "FFF1D6";
+                case "N/A" -> "EEF0F4";
+                default -> "F7F6FC";
+            };
+            String colorEstado = switch (estado) {
+                case "OK" -> "187443";
+                case "C/R" -> "9A5B00";
+                case "N/A" -> "626B7A";
+                default -> "333333";
+            };
+            configurarCeldaChecklist(fila.getCell(1), estado, fondoEstado, colorEstado,
+                    true, true, "2545");
+        }
+    }
+
+    private void configurarCeldaChecklist(XWPFTableCell celda, String valor, String fondo, String colorTexto,
+                                           boolean negrita, boolean centrar, String ancho) {
+        celda.setWidth(ancho);
+        celda.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
+        sombrearCelda(celda, fondo);
+        XWPFParagraph parrafo = celda.getParagraphs().isEmpty() ? celda.addParagraph() : celda.getParagraphs().get(0);
+        parrafo.setSpacingBefore(25);
+        parrafo.setSpacingAfter(25);
+        if (centrar) {
+            parrafo.setAlignment(ParagraphAlignment.CENTER);
+        }
+        XWPFRun run = parrafo.createRun();
+        run.setText(valor == null || valor.isBlank() ? "—" : valor);
+        run.setFontFamily("Arial");
+        run.setFontSize(9);
+        run.setBold(negrita);
+        run.setColor(colorTexto);
+    }
+
+    private String estadoChecklist(String estado) {
+        String normalizado = texto(estado).trim().toUpperCase(Locale.ROOT).replace(" ", "");
+        return switch (normalizado) {
+            case "OK" -> "OK";
+            case "CR", "C/R" -> "C/R";
+            case "NA", "N/A" -> "N/A";
+            default -> normalizado.isBlank() ? "—" : normalizado;
+        };
+    }
+
+    private String equipoTecnicoTarea(Tarea tarea) {
+        List<String> nombres = new ArrayList<>();
+        Tecnico cabecera = tarea.getTecnicoCabecera();
+        if (cabecera != null) {
+            agregarNombreTecnico(nombres, cabecera);
+        }
+        for (Tecnico invitado : tarea.getTecnicosInvitados()) {
+            agregarNombreTecnico(nombres, invitado);
+        }
+        return nombres.isEmpty() ? "Sin técnicos registrados" : String.join(" · ", nombres);
+    }
+
+    private void agregarNombreTecnico(List<String> nombres, Tecnico tecnico) {
+        String nombre = (texto(tecnico.getNombre()) + " " + texto(tecnico.getApellido())).trim();
+        if (!nombre.isBlank() && !nombres.contains(nombre)) {
+            nombres.add(nombre);
         }
     }
 

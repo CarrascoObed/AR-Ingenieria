@@ -25,14 +25,13 @@ data class MonofasicoChecklistItem(
 data class MonofasicoState(
     val inspectionId: String = newId(),
     val registration: MonofasicoRegistration = MonofasicoRegistration(),
-    val previousPhotos: List<PhotoSlot> = listOf(PhotoSlot(1), PhotoSlot(2)),
+    val previousPhotos: List<PhotoSlot> = listOf(PhotoSlot(1)),
     val measurements: List<MonofasicoMeasurement> = MonofasicoConfig.variables
         .map { MonofasicoMeasurement(it.id, it.label, it.unit) },
     val reaprietePhoto: String? = null,
     val aseoPhoto: String? = null,
     val checklist: List<MonofasicoChecklistItem> = MonofasicoConfig.checklist
         .map { MonofasicoChecklistItem(it.id, it.label) },
-    val postPhotos: List<PhotoSlot> = listOf(PhotoSlot(1), PhotoSlot(2)),
     val observations: List<String> = emptyList(),
     val isSaving: Boolean = false,
     val finished: Boolean = false

@@ -26,14 +26,13 @@ data class TrifasicoChecklistItem(
 data class TrifasicoState(
     val inspectionId: String = newId(),
     val registration: TrifasicoRegistration = TrifasicoRegistration(),
-    val previousPhotos: List<PhotoSlot> = listOf(PhotoSlot(1), PhotoSlot(2)),
+    val previousPhotos: List<PhotoSlot> = listOf(PhotoSlot(1)),
     val measurements: List<TrifasicoMeasurement> = TrifasicoConfig.variables
         .map { TrifasicoMeasurement(it.id, it.label, it.unit) },
     val reaprietePhoto: String? = null,
     val aseoPhoto: String? = null,
     val checklist: List<TrifasicoChecklistItem> = TrifasicoConfig.checklist
         .map { TrifasicoChecklistItem(it.id, it.label) },
-    val postPhotos: List<PhotoSlot> = listOf(PhotoSlot(1), PhotoSlot(2)),
     val observations: List<String> = emptyList(),
     val isSaving: Boolean = false,
     val finished: Boolean = false
