@@ -58,6 +58,33 @@ npm run dev
 
 El frontend en http://localhost:5173 usa un proxy hacia el backend en `http://localhost:8080`.
 
+## CI/CD
+
+El workflow `.github/workflows/ci.yml` valida las solicitudes de cambio a `main` y cada actualización de esa rama:
+
+- Backend: `mvn verify` con Java 21.
+- Web: `npm ci` y `npm run build` con Node.js 22.
+- Android: compila Kotlin con Gradle y Android SDK; no genera APK.
+- Docker: construye las imágenes de backend y web para verificar los mismos Dockerfiles que usa producción.
+
+El despliegue conserva el temporizador de systemd del servidor. `deployment/auto-deploy.sh` consulta GitHub Actions para el commit que va a descargar y ejecuta Docker Compose solo después de que su workflow `CI` termine correctamente. Si CI está pendiente o falla, no despliega. El temporizador existente debe haberse instalado con `sudo bash deployment/install-autodeploy.sh`.
+
+Si el repositorio es privado, configura en el servidor un token de GitHub de mínimo privilegio con permiso de lectura de Actions:
+
+```bash
+sudo nano /etc/aring-autodeploy.env
+```
+
+Agrega `GITHUB_TOKEN=TOKEN_DE_LECTURA_DE_ACTIONS`, guarda el archivo y protege el secreto:
+
+```bash
+sudo chmod 600 /etc/aring-autodeploy.env
+sudo bash deployment/install-autodeploy.sh
+sudo systemctl restart aring-autodeploy.timer
+```
+
+En GitHub, configura una regla de protección para `main` que exija los checks `Backend tests`, `Frontend build`, `Android Kotlin compilation` y `Docker image builds` antes de permitir integrar cambios. Publica el pipeline primero mediante una solicitud de cambio aprobada por esos checks; así el temporizador de despliegue existente nunca toma un commit de `main` pendiente de validar.
+
 ## Estructura
 
 ```
