@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,6 +35,8 @@ import com.aring.movil.ui.theme.VioletaClaro
 @Composable
 fun TableroConfirmacion(
     tarea: Tarea,
+    progreso: String = "",
+    errorCierre: String? = null,
     onVolverATareas: () -> Unit
 ) {
     Column(
@@ -52,15 +55,19 @@ fun TableroConfirmacion(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                Icons.Rounded.CheckCircle,
+                if (!errorCierre.isNullOrBlank()) Icons.Rounded.ErrorOutline else Icons.Rounded.CheckCircle,
                 contentDescription = null,
-                tint = VerdeOk,
+                tint = if (!errorCierre.isNullOrBlank()) androidx.compose.ui.graphics.Color(0xFFC62828) else VerdeOk,
                 modifier = Modifier.size(56.dp)
             )
         }
         Spacer(Modifier.height(24.dp))
         Text(
-            "Mantenimiento: ${tarea.codigo} finalizado correctamente",
+            when {
+                !errorCierre.isNullOrBlank() -> "El servidor requiere corregir informes"
+                tarea.sincronizacionPendiente -> "Cierre de tarea en proceso"
+                else -> "Mantenimiento: ${tarea.codigo} finalizado correctamente"
+            },
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
             fontWeight = FontWeight.ExtraBold,
@@ -69,14 +76,26 @@ fun TableroConfirmacion(
         )
         Spacer(Modifier.height(10.dp))
         Text(
-            if (tarea.sincronizacionPendiente)
-                "La sincronización está pendiente: la tarea y sus informes están guardados en este dispositivo y se enviarán automáticamente cuando vuelva la conexión."
+            if (!errorCierre.isNullOrBlank())
+                "El servidor no aceptó todos los informes. Vuelve a tareas, abre la tarea y usa Corregir tableros. Los datos del paquete se conservan en el teléfono.\n\n$errorCierre"
+            else if (tarea.sincronizacionPendiente)
+                "El paquete del mantenimiento quedó guardado en este dispositivo. Se enviará al servidor y la tarea aparecerá finalizada en ambos lugares solo cuando el servidor confirme la recepción completa."
             else "Todos los tableros realizados fueron registrados y la tarea quedó finalizada.",
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
             color = TextoGris,
             fontSize = 14.sp
         )
+        if (progreso.isNotBlank()) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                progreso,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+                color = TextoGris,
+                fontSize = 13.sp
+            )
+        }
         Spacer(Modifier.height(32.dp))
         BtnPrimario(
             texto = "Volver a tareas",

@@ -41,6 +41,10 @@ import com.aring.movil.ui.theme.Violeta
 fun DetalleTareaTecnico(
     tarea: Tarea,
     tecnicoId: Int,
+    cierrePendiente: Boolean = false,
+    progresoCierre: String = "",
+    errorCierre: String? = null,
+    onCorregirCierre: () -> Unit = {},
     onAdministrarAyudantes: () -> Unit,
     onIngresar: (Tarea) -> Unit,
 ) {
@@ -135,7 +139,7 @@ fun DetalleTareaTecnico(
 
         Spacer(Modifier.height(12.dp))
 
-        if (tarea.sincronizacionPendiente) {
+        if (tarea.sincronizacionPendiente && !cierrePendiente) {
             Text(
                 "La sincronización está pendiente · esta tarea termina de sincronizarse cuando vuelva Internet.",
                 color = TextoGris,
@@ -144,7 +148,27 @@ fun DetalleTareaTecnico(
             Spacer(Modifier.height(12.dp))
         }
 
-        if (tarea.estado == "Finalizada" && !tarea.sincronizacionPendiente) {
+        if (!errorCierre.isNullOrBlank()) {
+            BannerError("El servidor rechazó algunos informes:\n$errorCierre")
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "La tarea sigue abierta. Corrige los tableros indicados para volver a preparar y enviar el paquete.",
+                color = TextoGris,
+                fontSize = 13.sp
+            )
+            Spacer(Modifier.height(12.dp))
+            BtnPrimario("Corregir tableros", Modifier.fillMaxWidth(), onClick = onCorregirCierre)
+        } else if (cierrePendiente) {
+            Text(
+                "El cierre está bloqueado para edición. La tarea se marcará finalizada cuando el servidor confirme la recepción completa.",
+                color = TextoGris,
+                fontSize = 13.sp
+            )
+            if (progresoCierre.isNotBlank()) {
+                Spacer(Modifier.height(10.dp))
+                Text(progresoCierre, color = TextoGris, fontSize = 13.sp)
+            }
+        } else if (tarea.estado == "Finalizada" && !tarea.sincronizacionPendiente) {
             Text(
                 "Tarea finalizada. El informe completo está disponible en el panel web del administrador.",
                 color = TextoGris,

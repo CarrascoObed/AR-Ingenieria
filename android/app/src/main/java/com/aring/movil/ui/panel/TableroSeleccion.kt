@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -49,8 +50,6 @@ import com.aring.movil.data.panel.TYPE_TRIFASICO
 import com.aring.movil.ui.components.BtnPrimario
 import com.aring.movil.ui.components.ConfirmarDialog
 import com.aring.movil.ui.components.Tarjeta
-import com.aring.movil.ui.theme.Blanco
-import com.aring.movil.ui.theme.BordeSuave
 import com.aring.movil.ui.theme.FondoGris
 import com.aring.movil.ui.theme.TextoGris
 import com.aring.movil.ui.theme.TextoOscuro
@@ -65,14 +64,19 @@ private fun TarjetaTipoTablero(
     subtitulo: String,
     detalles: String,
     icono: androidx.compose.ui.graphics.vector.ImageVector,
+    fondo: Color,
+    borde: Color,
+    fondoIcono: Color,
+    colorIcono: Color,
+    colorDetalle: Color,
     onClick: () -> Unit
 ) {
     Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Blanco)
-            .border(1.dp, BordeSuave, RoundedCornerShape(16.dp))
+            .background(fondo)
+            .border(1.dp, borde, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .padding(18.dp)
     ) {
@@ -81,10 +85,10 @@ private fun TarjetaTipoTablero(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(VioletaClaro),
+                    .background(fondoIcono),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icono, contentDescription = null, tint = Violeta, modifier = Modifier.size(22.dp))
+                Icon(icono, contentDescription = null, tint = colorIcono, modifier = Modifier.size(22.dp))
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
@@ -97,7 +101,7 @@ private fun TarjetaTipoTablero(
             detalles,
             modifier = Modifier.fillMaxWidth(),
             fontSize = 13.sp,
-            color = VioletaOscuro,
+            color = colorDetalle,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center
         )
@@ -194,6 +198,11 @@ fun TableroSeleccion(
             subtitulo = "Alimentación trifásica",
             detalles = "12 variables · 21 puntos de checklist",
             icono = Icons.Rounded.ElectricalServices,
+            fondo = Color(0xFFEAF4FF),
+            borde = Color(0xFFB8D8F5),
+            fondoIcono = Color(0xFFD5EAFE),
+            colorIcono = Color(0xFF1565C0),
+            colorDetalle = Color(0xFF15538A),
             onClick = { onSeleccionarTipo(TYPE_TRIFASICO) }
         )
         Spacer(Modifier.height(14.dp))
@@ -202,6 +211,11 @@ fun TableroSeleccion(
             subtitulo = "Alimentación monofásica",
             detalles = "4 variables · 9 puntos de checklist",
             icono = Icons.Rounded.Bolt,
+            fondo = Color(0xFFFFF6E5),
+            borde = Color(0xFFFFD890),
+            fondoIcono = Color(0xFFFFE9B8),
+            colorIcono = Color(0xFFB45309),
+            colorDetalle = Color(0xFF87500D),
             onClick = { onSeleccionarTipo(TYPE_MONOFASICO) }
         )
 
@@ -222,7 +236,7 @@ fun TableroSeleccion(
                 Column {
                     Text("Tableros realizados", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = TextoGris)
                     Text(
-                        "${tarea.tablerosRealizados + completados.size}",
+                        "${maxOf(tarea.tablerosRealizados, completados.size)}",
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 26.sp,
                         color = TextoOscuro

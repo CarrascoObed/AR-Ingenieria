@@ -15,6 +15,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -42,9 +43,6 @@ import com.aring.movil.data.Tarea
 import com.aring.movil.data.Tecnico
 import com.aring.movil.data.inicialesDe
 import com.aring.movil.data.panel.TableroDraftStore
-import com.aring.movil.data.panel.TableroRepository
-import com.aring.movil.data.panel.TYPE_MONOFASICO
-import com.aring.movil.data.panel.TYPE_TRIFASICO
 import com.aring.movil.data.panel.newId
 import com.aring.movil.ui.components.BannerError
 import com.aring.movil.ui.components.BarraNavegacion
@@ -66,6 +64,21 @@ import kotlinx.coroutines.withContext
 private val ITEMS_TECNICO = listOf(
     "Tareas" to Icons.Filled.List,
 )
+
+private fun textoProgresoCierre(fase: String, actual: Int, total: Int): String = when (fase) {
+    "PREPARACION" -> {
+        val porcentaje = if (total > 0) (actual * 100 / total).coerceIn(0, 100) else 100
+        "Empaquetando información: $actual de $total tableros · $porcentaje%"
+    }
+    "ESPERANDO_RED" -> "Paquete completo guardado · esperando conexión para enviarlo"
+    "ENVIO" -> {
+        val porcentaje = if (total > 0) (actual * 99 / total).coerceIn(0, 99) else 0
+        "Enviando informes al servidor: $actual de $total · $porcentaje%"
+    }
+    "CIERRE" -> "Informes recibidos; esperando confirmación del servidor · 99%"
+    "CONFIRMADO" -> "100% · Servidor confirmó la tarea finalizada"
+    else -> "Preparando el paquete local…"
+}
 
 @Composable
 fun App() {
@@ -144,6 +157,7 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
     var tareaFinalizarId by rememberSaveable { mutableIntStateOf(0) }
     var segundosRestantes by rememberSaveable { mutableIntStateOf(60) }
     var errorFinalizar by remember { mutableStateOf("") }
+    val progresoCierre = remember { mutableStateMapOf<Int, String>() }
     val scope = rememberCoroutineScope()
 
     fun refrescarTecnico() {
@@ -152,6 +166,26 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
 
     LaunchedEffect(Unit) {
         runCatching { Repositorio.cargarTecnico(tecnico.id) }
+    }
+
+    LaunchedEffect(tecnico.id) {
+        while (true) {
+            val estado = withContext(Dispatchers.IO) {
+                val ids = OfflineSync.tareasConCierrePendiente(tecnico.id)
+                val errors = ids.filter { !OfflineSync.errorCierre(it).isNullOrBlank() }.toSet()
+                Triple(ids, ids.filterNot { it in errors }.mapNotNull { tareaId ->
+                    val progress = OfflineSync.progresoPersistido(tareaId)
+                    if (progress != null) {
+                        tareaId to textoProgresoCierre(progress.first, progress.second, progress.third)
+                    } else null
+                }.toMap(), errors)
+            }
+            estado.second.forEach { (tareaId, texto) -> progresoCierre[tareaId] = texto }
+            progresoCierre.keys.toList().filter { it !in estado.first && !progresoCierre[it].orEmpty().startsWith("100%") }
+                .forEach(progresoCierre::remove)
+            estado.third.forEach(progresoCierre::remove)
+            kotlinx.coroutines.delay(1_000)
+        }
     }
 
     LaunchedEffect(tecnico.id) {
@@ -206,8 +240,28 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
     // el chip "Pendiente de sincronizar" desaparece y la tarea pasa a Finalizada sin acciones del usuario.
     DisposableEffect(tecnico.id) {
         val observador = Observer<List<WorkInfo>> { estados ->
-            if (estados != null && estados.any { it.state.isFinished }) {
-                refrescarTecnico()
+            if (estados != null) {
+                estados.forEach { info ->
+                    val data = info.progress
+                    val taskId = data.getInt("tareaId", 0)
+                    val actual = data.getInt("actual", 0)
+                    val total = data.getInt("total", 0)
+                    val fase = data.getString("fase")
+                    if (taskId > 0 && !fase.isNullOrBlank()) {
+                        progresoCierre[taskId] = textoProgresoCierre(fase, actual, total)
+                    }
+                }
+                if (estados.isNotEmpty() && estados.all { it.state.isFinished }) {
+                    estados.forEach { info ->
+                        val taskId = info.progress.getInt("tareaId", 0)
+                        if (taskId > 0 && info.progress.getString("fase") == "CONFIRMADO") {
+                            progresoCierre[taskId] = textoProgresoCierre("CONFIRMADO", 1, 1)
+                        } else if (taskId > 0 && (!OfflineSync.pendiente(taskId) || !OfflineSync.errorCierre(taskId).isNullOrBlank())) {
+                            progresoCierre.remove(taskId)
+                        }
+                    }
+                    refrescarTecnico()
+                }
             }
         }
         val live = WorkManager.getInstance(context.applicationContext)
@@ -268,9 +322,22 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                     DetalleTareaTecnico(
                         tarea = tarea,
                         tecnicoId = tecnico.id,
+                        cierrePendiente = OfflineSync.pendiente(tarea.id),
+                        errorCierre = OfflineSync.errorCierre(tarea.id),
+                        progresoCierre = progresoCierre[tarea.id].orEmpty(),
+                        onCorregirCierre = {
+                            if (OfflineSync.liberarCierreParaCorreccion(tarea.id)) {
+                                val editable = tarea.copy(estado = "En proceso", sincronizacionPendiente = false)
+                                val index = Repositorio.tareas.indexOfFirst { it.id == tarea.id }
+                                if (index >= 0) Repositorio.tareas[index] = editable
+                                OfflineTaskCache.save(tecnico.id, Repositorio.tareas.toList())
+                                progresoCierre.remove(tarea.id)
+                                pantalla = PantallaTec.SeleccionTablero(editable)
+                            }
+                        },
                         onAdministrarAyudantes = { pantalla = PantallaTec.AdministrarAyudantes(tarea) },
                         onIngresar = {
-                            pantalla = if (OfflineSync.pendiente(tarea.id) && tarea.esCabecera(tecnico.id)) {
+                            pantalla = if (OfflineSync.pendiente(tarea.id)) {
                                 PantallaTec.SeleccionTablero(tarea)
                             } else if (tarea.esInvitado(tecnico.id)) {
                                 PantallaTec.SeleccionTablero(tarea)
@@ -292,35 +359,65 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                 )
                 is PantallaTec.SeleccionTablero -> {
                     val tarea = tareaActual(p.tarea)
-                    TableroSeleccion(
-                        tarea = tarea,
-                        borradores = TableroDraftStore.listar(tarea.id),
-                        puedeFinalizar = !tarea.esInvitado(tecnico.id),
-                        onSeleccionarTipo = { tipo -> pantalla = PantallaTec.FlujoTablero(p.tarea, tipo, newId()) },
-                        onEditar = { borrador -> pantalla = PantallaTec.FlujoTablero(p.tarea, borrador.tipo, borrador.id) },
-                        onEliminar = { tablero -> TableroDraftStore.limpiar(tarea.id, tablero.tipo, tablero.id) },
-                        onFinalizar = {
-                            tareaFinalizarId = p.tarea.id
-                            confirmarFinalizar = true
-                        },
-                        onVolver = { volver() }
-                    )
-                }
-                is PantallaTec.FlujoTablero -> TableroFlujo(
-                    tipo = p.tipo,
-                    tareaId = p.tarea.id,
-                    inspectionId = p.inspectionId,
-                    onFinalizado = {
-                        TableroDraftStore.limpiarIncompletos(p.tarea.id)
-                        pantalla = PantallaTec.SeleccionTablero(p.tarea)
-                    },
-                    onVolver = {
-                        TableroDraftStore.limpiarIncompletos(p.tarea.id)
-                        pantalla = PantallaTec.SeleccionTablero(p.tarea)
+                    if (OfflineSync.pendiente(tarea.id)) {
+                        TableroConfirmacion(
+                            tarea = tarea,
+                            progreso = progresoCierre[tarea.id].orEmpty(),
+                            errorCierre = OfflineSync.errorCierre(tarea.id),
+                            onVolverATareas = { volver() }
+                        )
+                    } else {
+                        TableroSeleccion(
+                            tarea = tarea,
+                            borradores = TableroDraftStore.listar(tarea.id),
+                            puedeFinalizar = !tarea.esInvitado(tecnico.id),
+                            onSeleccionarTipo = { tipo ->
+                                val cantidad = maxOf(tarea.tablerosRealizados, TableroDraftStore.listar(tarea.id).size)
+                                if (cantidad >= 100) {
+                                    errorFinalizar = "Esta tarea alcanzó el límite de 100 tableros."
+                                } else {
+                                    errorFinalizar = ""
+                                    pantalla = PantallaTec.FlujoTablero(p.tarea, tipo, newId())
+                                }
+                            },
+                            onEditar = { borrador -> pantalla = PantallaTec.FlujoTablero(p.tarea, borrador.tipo, borrador.id) },
+                            onEliminar = { tablero -> TableroDraftStore.limpiar(tarea.id, tablero.tipo, tablero.id) },
+                            onFinalizar = {
+                                tareaFinalizarId = p.tarea.id
+                                confirmarFinalizar = true
+                            },
+                            onVolver = { volver() }
+                        )
                     }
-                )
+                }
+                is PantallaTec.FlujoTablero -> {
+                    if (OfflineSync.pendiente(p.tarea.id)) {
+                        TableroConfirmacion(
+                            tarea = tareaActual(p.tarea),
+                            progreso = progresoCierre[p.tarea.id].orEmpty(),
+                            errorCierre = OfflineSync.errorCierre(p.tarea.id),
+                            onVolverATareas = { pantalla = PantallaTec.Lista }
+                        )
+                    } else {
+                        TableroFlujo(
+                            tipo = p.tipo,
+                            tareaId = p.tarea.id,
+                            inspectionId = p.inspectionId,
+                            onFinalizado = {
+                                TableroDraftStore.limpiarIncompletos(p.tarea.id)
+                                pantalla = PantallaTec.SeleccionTablero(p.tarea)
+                            },
+                            onVolver = {
+                                TableroDraftStore.limpiarIncompletos(p.tarea.id)
+                                pantalla = PantallaTec.SeleccionTablero(p.tarea)
+                            }
+                        )
+                    }
+                }
                 is PantallaTec.Confirmacion -> TableroConfirmacion(
                     tarea = tareaActual(p.tarea),
+                    progreso = progresoCierre[p.tarea.id].orEmpty(),
+                    errorCierre = OfflineSync.errorCierre(p.tarea.id),
                     onVolverATareas = {
                         volver()
                     }
@@ -376,32 +473,26 @@ fun MainScreenTecnico(tecnico: Tecnico, onCerrarSesion: () -> Unit) {
                             errorFinalizar = "Hay inspecciones sin completar. Seleccione el tipo de tablero correspondiente para continuar y terminar su registro antes de cerrar la tarea."
                             return@launch
                         }
-                        val cierreYaPendiente = OfflineSync.pendiente(tareaFinalizarId)
-                        borradores.forEach { borrador ->
-                            val informe = withContext(Dispatchers.Default) {
-                                when (borrador.tipo) {
-                                    TYPE_TRIFASICO -> TableroDraftStore.cargarTrifasico(tareaFinalizarId, borrador.id)?.let { TableroRepository.buildTrifasico(tareaFinalizarId, tecnico.id, it) }
-                                    TYPE_MONOFASICO -> TableroDraftStore.cargarMonofasico(tareaFinalizarId, borrador.id)?.let { TableroRepository.buildMonofasico(tareaFinalizarId, tecnico.id, it) }
-                                    else -> null
-                                }
-                            } ?: error("No se pudo recuperar uno de los tableros guardados.")
-                            withContext(Dispatchers.IO) { OfflineSync.guardarInforme(tareaFinalizarId, tecnico, informe, deferUntilFinalization = true) }
+                        if (maxOf(tarea.tablerosRealizados, borradores.size) > 100) {
+                            errorFinalizar = "Esta tarea supera el límite de 100 tableros. Revise los registros antes de finalizar."
+                            return@launch
                         }
-                        OfflineSync.finalizar(tareaFinalizarId, tecnico)
+                        progresoCierre[tareaFinalizarId] = "Preparando el paquete local…"
+                        withContext(Dispatchers.IO) {
+                            OfflineSync.finalizarDesdeTableros(tareaFinalizarId, tecnico, borradores.size)
+                        }
                         val actualizada = Repositorio.tareas.firstOrNull { it.id == tareaFinalizarId } ?: tarea
                         val finalLocal = actualizada.copy(
-                            estado = "Finalizada",
+                            estado = "En proceso",
                             sincronizacionPendiente = true,
-                            tablerosRealizados = maxOf(
-                                actualizada.tablerosRealizados,
-                                tarea.tablerosRealizados + if (cierreYaPendiente) 0 else borradores.size
-                            )
+                            tablerosRealizados = maxOf(actualizada.tablerosRealizados, tarea.tablerosRealizados, borradores.size)
                         )
                         val index = Repositorio.tareas.indexOfFirst { it.id == tareaFinalizarId }
                         if (index >= 0) Repositorio.tareas[index] = finalLocal
                         OfflineTaskCache.save(tecnico.id, Repositorio.tareas.toList())
                         pantalla = PantallaTec.Confirmacion(finalLocal)
                     } catch (e: Exception) {
+                        progresoCierre.remove(tareaFinalizarId)
                         errorFinalizar = e.message ?: "No se pudo guardar la finalización en el dispositivo."
                         pantalla = if (tarea != null) {
                             PantallaTec.SeleccionTablero(tarea)

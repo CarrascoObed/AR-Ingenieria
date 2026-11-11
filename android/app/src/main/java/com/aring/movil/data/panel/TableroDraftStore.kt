@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.Normalizer
+import java.util.Locale
 
 object TableroDraftStore {
     private lateinit var prefs: SharedPreferences
@@ -35,17 +37,24 @@ object TableroDraftStore {
      * cuando ambas cuentas se usan en el mismo dispositivo; cada técnico abre
      * siempre su propio tablero dentro de la tarea.
      */
-    private fun key(tareaId: Int, tipo: String, inspectionId: String = "legacy"): String {
-        val tecnicoId = runCatching { com.aring.movil.data.Prefs.leerTecnico()?.id }.getOrNull() ?: 0
+    private fun key(tareaId: Int, tipo: String, inspectionId: String = "legacy", tecnicoIdOverride: Int? = null): String {
+        val tecnicoId = tecnicoIdOverride ?: runCatching { com.aring.movil.data.Prefs.leerTecnico()?.id }.getOrNull() ?: 0
         if (inspectionId == "legacy") return "draft_${tecnicoId}_${tareaId}_$tipo"
         return "draft_${tecnicoId}_${tareaId}_${tipo}_$inspectionId"
     }
 
-    data class Borrador(val id: String, val tipo: String, val descripcion: String, val ubicacion: String, val terminado: Boolean)
+    data class Borrador(
+        val id: String,
+        val tipo: String,
+        val descripcion: String,
+        val ubicacion: String,
+        val terminado: Boolean,
+        val fechaFinalizacion: Long = 0L
+    )
 
-    fun listar(tareaId: Int): List<Borrador> {
+    fun listar(tareaId: Int, tecnicoIdOverride: Int? = null): List<Borrador> {
         limpiarIncompletos(tareaId)
-        val tecnicoId = runCatching { com.aring.movil.data.Prefs.leerTecnico()?.id }.getOrNull() ?: 0
+        val tecnicoId = tecnicoIdOverride ?: runCatching { com.aring.movil.data.Prefs.leerTecnico()?.id }.getOrNull() ?: 0
         val prefix = "draft_${tecnicoId}_${tareaId}_"
         data class Guardado(val key: String, val borrador: Borrador, val firma: String)
         val guardados = prefs.all.entries.mapNotNull { (k, raw) ->
@@ -54,10 +63,10 @@ object TableroDraftStore {
                 val p = k.removePrefix(prefix).split('_', limit = 2)
                 val json = JSONObject(raw)
                 val tipo = p[0]
-                val firma = "$tipo|${JSONObject(json.toString()).apply { remove("finished") }}"
+                val firma = "$tipo|${JSONObject(json.toString()).apply { remove("finished"); remove("finishedAt") }}"
                 Guardado(
                     k,
-                    Borrador(p.getOrElse(1) { "legacy" }, tipo, json.optString("descripcion"), json.optString("ubicacion"), json.optBoolean("finished")),
+                    Borrador(p.getOrElse(1) { "legacy" }, tipo, json.optString("descripcion"), json.optString("ubicacion"), json.optBoolean("finished"), json.optLong("finishedAt")),
                     firma
                 )
             }.getOrNull()
@@ -70,8 +79,44 @@ object TableroDraftStore {
         if (clavesDuplicadas.isNotEmpty()) {
             prefs.edit().also { editor -> clavesDuplicadas.forEach(editor::remove) }.apply()
         }
-        return canonicos.map { it.borrador }.sortedBy { it.id }
+        // Los registros previos a la fecha de finalización reciben un orden estable de migración.
+        val antiguos = canonicos.map { it.borrador }.filter { it.terminado && it.fechaFinalizacion <= 0 }
+            .sortedWith(compareBy<Borrador>({ it.tipo }, { it.id }))
+            .mapIndexed { index, borrador -> "${borrador.tipo}|${borrador.id}" to index + 1L }.toMap()
+        return canonicos.map { it.borrador.copy(
+            fechaFinalizacion = it.borrador.fechaFinalizacion.takeIf { fecha -> fecha > 0 }
+                ?: antiguos["${it.borrador.tipo}|${it.borrador.id}"] ?: Long.MAX_VALUE
+        ) }.sortedWith(compareBy<Borrador>({ if (it.terminado) 0 else 1 }, { it.fechaFinalizacion }, { it.id }))
     }
+
+    fun hayDescripcionDuplicada(
+        tareaId: Int,
+        inspectionId: String,
+        descripcion: String,
+        nombresServidor: List<Pair<String, String?>>
+    ): Boolean {
+        val nombre = normalizarDescripcion(descripcion)
+        if (nombre.isBlank()) return false
+        val tecnicoId = runCatching { com.aring.movil.data.Prefs.leerTecnico()?.id }.getOrNull() ?: 0
+        val prefix = "draft_${tecnicoId}_${tareaId}_"
+        val repetidoLocal = prefs.all.entries.any { (key, raw) ->
+            if (!key.startsWith(prefix) || raw !is String) return@any false
+            val id = key.removePrefix(prefix).split('_', limit = 2).getOrElse(1) { "legacy" }
+            if (id == inspectionId) return@any false
+            runCatching { normalizarDescripcion(JSONObject(raw).optString("descripcion")) == nombre }
+                .getOrDefault(false)
+        }
+        val repetidoServidor = nombresServidor.any { (nombreServidor, operationId) ->
+            operationId != inspectionId && normalizarDescripcion(nombreServidor) == nombre
+        }
+        return repetidoLocal || repetidoServidor
+    }
+
+    private fun normalizarDescripcion(descripcion: String): String =
+        Normalizer.normalize(descripcion.trim(), Normalizer.Form.NFD)
+            .replace("\\p{M}+".toRegex(), "")
+            .lowercase(Locale.ROOT)
+            .replace("\\s+".toRegex(), " ")
 
     fun limpiar(tareaId: Int, tipo: String, inspectionId: String) { prefs.edit().remove(key(tareaId, tipo, inspectionId)).apply() }
     fun limpiarTarea(tareaId: Int, tecnicoId: Int = runCatching { com.aring.movil.data.Prefs.leerTecnico()?.id }.getOrNull() ?: 0) {
@@ -81,23 +126,33 @@ object TableroDraftStore {
 
     fun guardarTrifasico(tareaId: Int, st: TrifasicoState, inspectionId: String = st.inspectionId) {
         val storageKey = key(tareaId, TYPE_TRIFASICO, inspectionId)
-        val yaTerminado = prefs.getString(storageKey, null)?.let { runCatching { JSONObject(it).optBoolean("finished") }.getOrDefault(false) } ?: false
-        prefs.edit().putString(storageKey, jsonTrifasico(st).put("finished", st.finished || yaTerminado).toString()).apply()
+        val anterior = prefs.getString(storageKey, null)?.let { runCatching { JSONObject(it) }.getOrNull() }
+        val yaTerminado = anterior?.optBoolean("finished") == true
+        val fechaFinalizacion = anterior?.optLong("finishedAt")?.takeIf { yaTerminado && it > 0 }
+            ?: if (st.finished && !yaTerminado) System.currentTimeMillis() else null
+        val json = jsonTrifasico(st).put("finished", st.finished || yaTerminado)
+        if (fechaFinalizacion != null) json.put("finishedAt", fechaFinalizacion)
+        prefs.edit().putString(storageKey, json.toString()).apply()
     }
 
-    fun cargarTrifasico(tareaId: Int, inspectionId: String = "legacy"): TrifasicoState? {
-        val raw = prefs.getString(key(tareaId, TYPE_TRIFASICO, inspectionId), null) ?: return null
+    fun cargarTrifasico(tareaId: Int, inspectionId: String = "legacy", tecnicoIdOverride: Int? = null): TrifasicoState? {
+        val raw = prefs.getString(key(tareaId, TYPE_TRIFASICO, inspectionId, tecnicoIdOverride), null) ?: return null
         return runCatching { trifasicoDesdeJson(JSONObject(raw)).copy(inspectionId = inspectionId, finished = JSONObject(raw).optBoolean("finished")) }.getOrNull()
     }
 
     fun guardarMonofasico(tareaId: Int, st: MonofasicoState, inspectionId: String = st.inspectionId) {
         val storageKey = key(tareaId, TYPE_MONOFASICO, inspectionId)
-        val yaTerminado = prefs.getString(storageKey, null)?.let { runCatching { JSONObject(it).optBoolean("finished") }.getOrDefault(false) } ?: false
-        prefs.edit().putString(storageKey, jsonMonofasico(st).put("finished", st.finished || yaTerminado).toString()).apply()
+        val anterior = prefs.getString(storageKey, null)?.let { runCatching { JSONObject(it) }.getOrNull() }
+        val yaTerminado = anterior?.optBoolean("finished") == true
+        val fechaFinalizacion = anterior?.optLong("finishedAt")?.takeIf { yaTerminado && it > 0 }
+            ?: if (st.finished && !yaTerminado) System.currentTimeMillis() else null
+        val json = jsonMonofasico(st).put("finished", st.finished || yaTerminado)
+        if (fechaFinalizacion != null) json.put("finishedAt", fechaFinalizacion)
+        prefs.edit().putString(storageKey, json.toString()).apply()
     }
 
-    fun cargarMonofasico(tareaId: Int, inspectionId: String = "legacy"): MonofasicoState? {
-        val raw = prefs.getString(key(tareaId, TYPE_MONOFASICO, inspectionId), null) ?: return null
+    fun cargarMonofasico(tareaId: Int, inspectionId: String = "legacy", tecnicoIdOverride: Int? = null): MonofasicoState? {
+        val raw = prefs.getString(key(tareaId, TYPE_MONOFASICO, inspectionId, tecnicoIdOverride), null) ?: return null
         return runCatching { monofasicoDesdeJson(JSONObject(raw)).copy(inspectionId = inspectionId, finished = JSONObject(raw).optBoolean("finished")) }.getOrNull()
     }
 
