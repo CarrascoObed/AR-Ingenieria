@@ -37,17 +37,12 @@ object Repositorio {
         return base.copy(password = password)
     }
 
-    /**
-     * Aplica a la vista local los efectos de envíos pendientes del outbox:
-     * - Si hay marcador de finalización, la tarea se muestra Finalizada y pendiente de sincronizar.
-     * - El contador suma los informes aún no confirmados por el servidor, para que no
-     *   aparezca en cero después de guardar tableros en el dispositivo.
-     */
+    /** Aplica los cierres e inicios pendientes sin anticipar el estado final del servidor. */
     private fun conEstadoLocal(t: Tarea): Tarea {
         val pendientes = runCatching { OfflineSync.informes(t.id).size }.getOrDefault(0)
         return when {
-            OfflineSync.pendiente(t.id) || t.sincronizacionPendiente ->
-                t.copy(estado = "Finalizada", sincronizacionPendiente = true, tablerosRealizados = t.tablerosRealizados + pendientes)
+            OfflineSync.pendiente(t.id) ->
+                t.copy(estado = "En proceso", sincronizacionPendiente = true, tablerosRealizados = t.tablerosRealizados + pendientes)
             runCatching { OfflineSync.pendienteInicio(t.id) }.getOrDefault(false) ->
                 t.copy(estado = "En proceso", sincronizacionPendiente = true, tablerosRealizados = t.tablerosRealizados + pendientes)
             pendientes > 0 -> t.copy(tablerosRealizados = t.tablerosRealizados + pendientes)

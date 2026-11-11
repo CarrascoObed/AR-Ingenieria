@@ -54,6 +54,10 @@ public class TableroService {
             }
         }
 
+        if (tarea.getEstado() != com.aring.model.EstadoTarea.EN_PROCESO) {
+            throw new ApiException("Solo se pueden guardar tableros mientras la tarea está en proceso.", HttpStatus.CONFLICT);
+        }
+
         String descripcionNormalizada = normalizarNombre(request.getDescripcion());
         boolean nombreDuplicado = informeTableroRepository.listarNombresPorTarea(tareaId).stream()
                 .filter(tablero -> request.getClientOperationId() == null
