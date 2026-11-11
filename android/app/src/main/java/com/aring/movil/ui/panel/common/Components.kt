@@ -101,7 +101,6 @@ val StepLabels = listOf(
     "Evidencias",
     "Variables",
     "Checklist",
-    "Evidencias",
     "Observaciones"
 )
 

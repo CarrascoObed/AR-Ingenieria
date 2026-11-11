@@ -2,6 +2,7 @@ package com.aring.movil.ui.panel.trifasico
 
 import com.aring.movil.data.panel.ChecklistStatus
 import com.aring.movil.data.panel.TableroDraftStore
+import com.aring.movil.data.panel.PhotoSlot
 import com.aring.movil.data.panel.TrifasicoState
 import com.aring.movil.data.panel.TrifasicoValidation
 import com.aring.movil.data.panel.ValidationResult
@@ -53,11 +54,15 @@ class TrifasicoViewModel(private val tareaId: Int, private val inspectionId: Str
 
     fun setPreviousPhoto(index: Int, path: String?) =
         cambiar { st ->
-            st.copy(
-                previousPhotos = st.previousPhotos.map {
-                    if (it.index == index) it.copy(path = path) else it
-                }
-            )
+            val existentes = st.previousPhotos.any { it.index == index }
+            val actualizadas = when {
+                existentes && index == 1 -> st.previousPhotos.map { if (it.index == index) it.copy(path = path) else it }
+                existentes && path == null -> st.previousPhotos.filterNot { it.index == index }
+                existentes -> st.previousPhotos.map { if (it.index == index) it.copy(path = path) else it }
+            path != null -> st.previousPhotos + PhotoSlot(index, path)
+                else -> st.previousPhotos
+            }.sortedBy { it.index }
+            st.copy(previousPhotos = actualizadas.ifEmpty { listOf(PhotoSlot(1)) })
         }
 
     fun setMeasurementValue(variableId: String, value: String) =
@@ -103,15 +108,6 @@ class TrifasicoViewModel(private val tareaId: Int, private val inspectionId: Str
     fun setChecklistObservation(itemId: String, value: String) =
         cambiar { st ->
             st.copy(checklist = st.checklist.map { if (it.itemId == itemId) it.copy(observation = value) else it })
-        }
-
-    fun setPostPhoto(index: Int, path: String?) =
-        cambiar { st ->
-            st.copy(
-                postPhotos = st.postPhotos.map {
-                    if (it.index == index) it.copy(path = path) else it
-                }
-            )
         }
 
     fun setObservation(index: Int, value: String) =

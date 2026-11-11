@@ -12,7 +12,7 @@ object TableroRepository {
         root.put("tamanioTablero", st.registration.tamanioTablero)
         root.put("mediciones", medicionesTrifasicas(st.measurements))
         root.put("checklist", checklistTrifasico(st.checklist))
-        root.put("imagenes", imagenes(st.previousPhotos, st.postPhotos, st.reaprietePhoto, st.aseoPhoto))
+        root.put("imagenes", imagenes(st.previousPhotos, st.reaprietePhoto, st.aseoPhoto))
         root.put("observaciones", observacionesFinales(st.observations, st.checklist.map { Triple(it.label, it.status, it.observation) }))
         return root
     }
@@ -22,7 +22,7 @@ object TableroRepository {
         root.put("clientOperationId", st.inspectionId)
         root.put("mediciones", medicionesMonofasicas(st.measurements))
         root.put("checklist", checklistMonofasico(st.checklist))
-        root.put("imagenes", imagenes(st.previousPhotos, st.postPhotos, st.reaprietePhoto, st.aseoPhoto))
+        root.put("imagenes", imagenes(st.previousPhotos, st.reaprietePhoto, st.aseoPhoto))
         root.put("observaciones", observacionesFinales(st.observations, st.checklist.map { Triple(it.label, it.status, it.observation) }))
         return root
     }
@@ -101,7 +101,6 @@ object TableroRepository {
 
     private fun imagenes(
         previas: List<PhotoSlot>,
-        posteriores: List<PhotoSlot>,
         reapriete: String?,
         aseo: String?
     ): JSONArray {
@@ -110,14 +109,6 @@ object TableroRepository {
             ApiService.fotoBase64(slot.path)?.let { base64 ->
                 arr.put(JSONObject()
                     .put("categoria", "PREVIA")
-                    .put("indice", slot.index)
-                    .put("base64", base64))
-            }
-        }
-        posteriores.forEach { slot ->
-            ApiService.fotoBase64(slot.path)?.let { base64 ->
-                arr.put(JSONObject()
-                    .put("categoria", "POSTERIOR")
                     .put("indice", slot.index)
                     .put("base64", base64))
             }

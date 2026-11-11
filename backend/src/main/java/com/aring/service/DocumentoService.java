@@ -356,6 +356,27 @@ public class DocumentoService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public byte[] documentosTareaZip(String codigo) {
+        List<Tarea> tareas = tareasFinalizadasConDatos(codigo, null, null);
+        if (tareas.size() != 1) {
+            throw new ApiException("No se encontró una única tarea finalizada para descargar.",
+                    org.springframework.http.HttpStatus.NOT_FOUND);
+        }
+        Tarea tarea = tareas.get(0);
+        String nombreBase = nombreBaseArchivoZip(tarea);
+        try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+             ZipOutputStream zip = new ZipOutputStream(bytes)) {
+            agregarEntradaZip(zip, nombreBase + ".xlsx", finalizadasExcel(tarea.getCodigo(), null, null));
+            agregarEntradaZip(zip, nombreBase + ".docx", informeTareaWord(tarea.getId()).bytes());
+            zip.finish();
+            return bytes.toByteArray();
+        } catch (Exception e) {
+            throw new ApiException("No se pudieron generar los documentos de la tarea: " + e.getMessage(),
+                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     private boolean fechaDentroDelPeriodo(Tarea tarea, int anio, Integer mes) {
         Instant fecha = fechaParaDocumento(tarea);
         if (fecha == null) {

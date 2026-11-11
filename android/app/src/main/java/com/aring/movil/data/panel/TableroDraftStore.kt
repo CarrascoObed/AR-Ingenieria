@@ -160,7 +160,7 @@ object TableroDraftStore {
         fotos.forEach { put(JSONObject().put("i", it.index).put("p", it.path ?: "")) }
     }
 
-    private fun fotosDesdeJson(arr: JSONArray?, cantidad: Int): List<PhotoSlot> {
+    private fun fotosDesdeJson(arr: JSONArray?, mantenerAlMenos: Int = 1): List<PhotoSlot> {
         val mapa = mutableMapOf<Int, String?>()
         arr?.let { a ->
             for (j in 0 until a.length()) {
@@ -168,7 +168,11 @@ object TableroDraftStore {
                 mapa[o.getInt("i")] = o.optString("p").ifEmpty { null }
             }
         }
-        return (1..cantidad).map { PhotoSlot(it, mapa[it]) }
+        val fotosGuardadas = mapa.map { (indice, ruta) -> PhotoSlot(indice, ruta) }.sortedBy { it.index }
+        val conFotoBase = if (fotosGuardadas.none { it.index == 1 }) listOf(PhotoSlot(1)) + fotosGuardadas else fotosGuardadas
+        return if (conFotoBase.size >= mantenerAlMenos) conFotoBase else (1..mantenerAlMenos).map { indice ->
+            conFotoBase.firstOrNull { it.index == indice } ?: PhotoSlot(indice)
+        }
     }
 
     private fun medicionesJson(items: List<Triple<String, String, String?>>): JSONArray = JSONArray().apply {
@@ -204,7 +208,6 @@ object TableroDraftStore {
         o.put("previousPhotos", fotosJson(st.previousPhotos))
         o.put("mediciones", medicionesJson(st.measurements.map { Triple(it.variableId, it.value, it.photoPath) }))
         o.put("checklist", checklistJson(st.checklist.map { ChecklistDraft(it.itemId, it.status, it.photoPath, it.observation) }))
-        o.put("postPhotos", fotosJson(st.postPhotos))
         return o
     }
 
@@ -219,7 +222,6 @@ object TableroDraftStore {
         o.put("previousPhotos", fotosJson(st.previousPhotos))
         o.put("mediciones", medicionesJson(st.measurements.map { Triple(it.variableId, it.value, it.photoPath) }))
         o.put("checklist", checklistJson(st.checklist.map { ChecklistDraft(it.itemId, it.status, it.photoPath, it.observation) }))
-        o.put("postPhotos", fotosJson(st.postPhotos))
         return o
     }
 
@@ -260,7 +262,7 @@ object TableroDraftStore {
                 nivel = o.optString("nivel"),
                 tamanioTablero = o.optString("tamanioTablero"),
             ),
-            previousPhotos = fotosDesdeJson(o.optJSONArray("previousPhotos"), 2),
+            previousPhotos = fotosDesdeJson(o.optJSONArray("previousPhotos")),
             measurements = base.measurements.map { m ->
                 val d = mediciones[m.variableId]
                 m.copy(value = d?.first ?: "", photoPath = d?.second)
@@ -271,7 +273,6 @@ object TableroDraftStore {
                 val d = checklist[c.itemId]
                 c.copy(status = d?.first, photoPath = d?.second, observation = d?.third.orEmpty())
             },
-            postPhotos = fotosDesdeJson(o.optJSONArray("postPhotos"), 2),
             observations = observacionesDesdeJson(o),
         )
     }
@@ -286,7 +287,7 @@ object TableroDraftStore {
                 ubicacion = o.optString("ubicacion"),
                 nivel = o.optString("nivel"),
             ),
-            previousPhotos = fotosDesdeJson(o.optJSONArray("previousPhotos"), 2),
+            previousPhotos = fotosDesdeJson(o.optJSONArray("previousPhotos")),
             measurements = base.measurements.map { m ->
                 val d = mediciones[m.variableId]
                 m.copy(value = d?.first ?: "", photoPath = d?.second)
@@ -297,7 +298,6 @@ object TableroDraftStore {
                 val d = checklist[c.itemId]
                 c.copy(status = d?.first, photoPath = d?.second, observation = d?.third.orEmpty())
             },
-            postPhotos = fotosDesdeJson(o.optJSONArray("postPhotos"), 2),
             observations = observacionesDesdeJson(o),
         )
     }
