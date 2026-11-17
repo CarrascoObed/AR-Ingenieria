@@ -401,7 +401,12 @@ private fun CampoComentarioConSugerencias(
                 border = BorderStroke(1.dp, BordeSuave),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                Column(Modifier.padding(vertical = 6.dp)) {
+                Column(
+                    Modifier
+                        .heightIn(max = 240.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 6.dp)
+                ) {
                     Text(
                         "Sugerencias · toque para agregar",
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
