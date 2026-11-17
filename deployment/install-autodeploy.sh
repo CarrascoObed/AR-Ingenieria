@@ -25,6 +25,13 @@ if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>
   exit 1
 fi
 
+for herramienta in git curl python3; do
+  if ! command -v "$herramienta" >/dev/null 2>&1; then
+    echo "Se requiere la herramienta $herramienta para el despliegue automático." >&2
+    exit 1
+  fi
+done
+
 if ! getent group docker >/dev/null 2>&1; then
   echo "No existe el grupo docker. Verifica la instalación de Docker." >&2
   exit 1
@@ -45,6 +52,7 @@ User=$SERVICE_USER
 SupplementaryGroups=docker
 Environment=HOME=$USER_HOME
 Environment=AR_INGENIERIA_PROJECT_DIR=$PROJECT_DIR
+EnvironmentFile=-/etc/aring-autodeploy.env
 WorkingDirectory=$PROJECT_DIR
 ExecStart=/usr/bin/bash $PROJECT_DIR/deployment/auto-deploy.sh
 TimeoutStartSec=30min
