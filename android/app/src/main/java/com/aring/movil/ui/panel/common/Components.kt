@@ -3,6 +3,7 @@
 package com.aring.movil.ui.panel.common
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -390,7 +391,44 @@ private fun CampoComentarioConSugerencias(
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Box(modifier.fillMaxWidth()) {
+    Column(modifier.fillMaxWidth()) {
+        if (expanded && sugerencias.isNotEmpty()) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, BordeSuave),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(Modifier.padding(vertical = 6.dp)) {
+                    Text(
+                        "Sugerencias · toque para agregar",
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Violeta
+                    )
+                    sugerencias.forEach { sugerencia ->
+                        TextButton(
+                            onClick = { onValueChange(sugerencia) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 42.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                sugerencia,
+                                modifier = Modifier.fillMaxWidth(),
+                                fontSize = 14.sp,
+                                color = TextoOscuro
+                            )
+                        }
+                    }
+                }
+            }
+        }
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
@@ -405,8 +443,12 @@ private fun CampoComentarioConSugerencias(
             shape = RoundedCornerShape(12.dp),
             trailingIcon = if (sugerencias.isNotEmpty()) {
                 {
-                    IconButton(onClick = { expanded = true }) {
-                        Icon(Icons.Rounded.ArrowDropDown, contentDescription = "Ver sugerencias", tint = Violeta)
+                    IconButton(onClick = { expanded = !expanded }) {
+                        Icon(
+                            Icons.Rounded.ArrowDropDown,
+                            contentDescription = if (expanded) "Ocultar sugerencias" else "Ver sugerencias",
+                            tint = Violeta
+                        )
                     }
                 }
             } else null,
@@ -417,24 +459,6 @@ private fun CampoComentarioConSugerencias(
                 focusedLabelColor = Violeta
             )
         )
-        DropdownMenu(
-            expanded = expanded && sugerencias.isNotEmpty(),
-            onDismissRequest = { expanded = false },
-            modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .heightIn(max = 320.dp)
-        ) {
-            sugerencias.forEach { sugerencia ->
-                DropdownMenuItem(
-                    text = { Text(sugerencia, fontSize = 14.sp, color = TextoOscuro) },
-                    onClick = {
-                        onValueChange(sugerencia)
-                        expanded = false
-                    },
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
-                )
-            }
-        }
     }
 }
 
