@@ -142,7 +142,12 @@ object TableroRepository {
         checklist: List<Triple<String, ChecklistStatus?, String>>
     ): JSONArray = JSONArray().apply {
         observaciones.forEach { put(it) }
-        checklist.filter { (it.second == ChecklistStatus.CR) && it.third.isNotBlank() }
-            .forEach { (label, _, observation) -> put("$label: $observation") }
+        checklist.filter { it.second == ChecklistStatus.CR }
+            .forEach { (label, _, observation) ->
+                observation.lineSequence()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .forEach { comentario -> put("$label: $comentario") }
+            }
     }
 }

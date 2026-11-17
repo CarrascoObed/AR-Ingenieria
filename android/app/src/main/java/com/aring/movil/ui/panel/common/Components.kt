@@ -25,9 +25,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
@@ -338,7 +340,8 @@ fun ObservacionesSection(
     observaciones: List<String>,
     onValueChange: (index: Int, value: String) -> Unit,
     onAdd: () -> Unit,
-    onRemove: (index: Int) -> Unit
+    onRemove: (index: Int) -> Unit,
+    sugerencias: List<String> = emptyList()
 ) {
     val lista = if (observaciones.isEmpty()) listOf("") else observaciones
     lista.forEachIndexed { index, texto ->
@@ -357,9 +360,10 @@ fun ObservacionesSection(
             }
         }
         Spacer(Modifier.height(4.dp))
-        MultilineField(
+        CampoComentarioConSugerencias(
             placeholder = "Escriba aquí sus observaciones...",
             value = texto,
+            sugerencias = sugerencias,
             onValueChange = { onValueChange(index, it) }
         )
         Spacer(Modifier.height(16.dp))
@@ -374,6 +378,120 @@ fun ObservacionesSection(
         Icon(Icons.Rounded.Add, contentDescription = null, tint = Violeta)
         Spacer(Modifier.width(8.dp))
         Text("Agregar observación", color = Violeta, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun CampoComentarioConSugerencias(
+    placeholder: String,
+    value: String,
+    sugerencias: List<String>,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { focus ->
+                    if (focus.isFocused && sugerencias.isNotEmpty()) expanded = true
+                },
+            placeholder = { Text(placeholder) },
+            minLines = 2,
+            maxLines = 4,
+            shape = RoundedCornerShape(12.dp),
+            trailingIcon = if (sugerencias.isNotEmpty()) {
+                {
+                    IconButton(onClick = { expanded = true }) {
+                        Icon(Icons.Rounded.ArrowDropDown, contentDescription = "Ver sugerencias", tint = Violeta)
+                    }
+                }
+            } else null,
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Violeta,
+                unfocusedBorderColor = BordeSuave,
+                focusedLabelColor = Violeta
+            )
+        )
+        DropdownMenu(
+            expanded = expanded && sugerencias.isNotEmpty(),
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .fillMaxWidth(0.94f)
+                .heightIn(max = 320.dp)
+        ) {
+            sugerencias.forEach { sugerencia ->
+                DropdownMenuItem(
+                    text = { Text(sugerencia, fontSize = 14.sp, color = TextoOscuro) },
+                    onClick = {
+                        onValueChange(sugerencia)
+                        expanded = false
+                    },
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                )
+            }
+        }
+    }
+}
+
+private fun comentariosDesdeTexto(texto: String): List<String> {
+    val comentarios = mutableListOf<String>()
+    var inicio = 0
+    texto.forEachIndexed { index, caracter ->
+        if (caracter == '\n') {
+            comentarios += texto.substring(inicio, index)
+            inicio = index + 1
+        }
+    }
+    comentarios += texto.substring(inicio)
+    return comentarios
+}
+
+private fun textoDesdeComentarios(comentarios: List<String>): String = comentarios.joinToString("\n")
+
+@Composable
+private fun ComentariosChecklist(
+    observacion: String,
+    sugerencias: List<String>,
+    onChange: (String) -> Unit
+) {
+    val comentarios = comentariosDesdeTexto(observacion)
+    comentarios.forEachIndexed { index, comentario ->
+        if (comentarios.size > 1) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Comentario ${index + 1}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextoOscuro)
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = {
+                    val actualizados = comentarios.toMutableList().apply { removeAt(index) }
+                    onChange(textoDesdeComentarios(if (actualizados.isEmpty()) listOf("") else actualizados))
+                }) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Eliminar comentario", tint = Violeta)
+                }
+            }
+        }
+        CampoComentarioConSugerencias(
+            placeholder = "Describa el detalle encontrado...",
+            value = comentario,
+            sugerencias = sugerencias,
+            onValueChange = { valor ->
+                val actualizados = comentarios.toMutableList().apply { this[index] = valor }
+                onChange(textoDesdeComentarios(actualizados))
+            }
+        )
+        if (index < comentarios.lastIndex) Spacer(Modifier.height(8.dp))
+    }
+    OutlinedButton(
+        onClick = { onChange(textoDesdeComentarios(comentarios + "")) },
+        modifier = Modifier.fillMaxWidth().height(44.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Icon(Icons.Rounded.Add, contentDescription = null, tint = Violeta)
+        Spacer(Modifier.width(6.dp))
+        Text("Agregar otro comentario", color = Violeta, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -631,6 +749,7 @@ fun ChecklistCard(
     onRetakePhoto: () -> Unit,
     onPhotoEdited: (String) -> Unit,
     onPhotoDeleted: () -> Unit = {},
+    sugerenciasObservacion: List<String> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -689,19 +808,10 @@ fun ChecklistCard(
                 Spacer(Modifier.height(12.dp))
                 Text("Observación de este punto", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = TextoOscuro)
                 Spacer(Modifier.height(6.dp))
-                OutlinedTextField(
-                    value = observation,
-                    onValueChange = onObservationChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Describa el detalle encontrado...") },
-                    minLines = 2,
-                    maxLines = 4,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Violeta,
-                        unfocusedBorderColor = BordeSuave,
-                        focusedLabelColor = Violeta
-                    )
+                ComentariosChecklist(
+                    observacion = observation,
+                    sugerencias = sugerenciasObservacion,
+                    onChange = onObservationChange
                 )
             }
         }

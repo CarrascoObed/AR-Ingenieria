@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.input.KeyboardType
 import com.aring.movil.camera.OpenCamera
 import com.aring.movil.camera.PhotoBus
+import com.aring.movil.data.panel.ChecklistCommentSuggestions
 import com.aring.movil.ui.panel.common.ChecklistCard
 import com.aring.movil.ui.panel.common.ChecklistObservationsSection
 import com.aring.movil.ui.panel.common.CollectPhotoResult
@@ -267,7 +268,8 @@ fun TrifasicoChecklistScreen(
                     onPhotoEdited = { nuevaRuta ->
                         vm.setChecklistPhoto(item.itemId, nuevaRuta)
                     },
-                    onPhotoDeleted = { vm.setChecklistPhoto(item.itemId, null) }
+                    onPhotoDeleted = { vm.setChecklistPhoto(item.itemId, null) },
+                    sugerenciasObservacion = ChecklistCommentSuggestions.paraItem(item.itemId)
                 )
                 Spacing12()
             }
@@ -365,7 +367,8 @@ fun TrifasicoObservacionesScreen(
                 observaciones = state.observations,
                 onValueChange = { index, value -> vm.setObservation(index, value) },
                 onAdd = { vm.addObservation() },
-                onRemove = { vm.removeObservation(it) }
+                onRemove = { vm.removeObservation(it) },
+                sugerencias = ChecklistCommentSuggestions.observacionesGenerales
             )
             Spacing16()
             ChecklistObservationsSection(
