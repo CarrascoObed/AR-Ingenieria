@@ -239,7 +239,10 @@ public class DocumentoService {
             int fila = 2;
             boolean primerBloque = true;
             for (Tarea tarea : tareas) {
-                List<InformeTablero> informes = informeTableroRepository.findAllByTareaIdOrderByIdAsc(tarea.getId());
+                List<InformeTablero> informes = informeTableroRepository.findAllByTareaIdOrderByIdAsc(tarea.getId())
+                        .stream()
+                        .filter(informe -> !observacionesConTexto(informe).isEmpty())
+                        .toList();
                 if (informes.isEmpty()) {
                     continue;
                 }
@@ -273,34 +276,18 @@ public class DocumentoService {
                 for (InformeTablero informe : informes) {
                     String tipoTablero = tipoTableroRendicion(informe);
                     String tamanioTablero = tamanioTableroRendicion(informe);
-                    List<ObservacionTablero> observaciones = new ArrayList<>(informe.getObservaciones());
-                    observaciones.sort(Comparator.comparingInt(ObservacionTablero::getOrden));
-                    if (observaciones.isEmpty()) {
+                    for (ObservacionTablero obs : observacionesConTexto(informe)) {
                         Row row = sheet.createRow(fila++);
                         escribirCelda(row, 1, informe.getNivel(), alternar ? datoCentradoAlt : datoCentrado);
                         escribirCelda(row, 2, informe.getUbicacion(), alternar ? datoTextoAlt : datoTexto);
                         escribirCelda(row, 3, informe.getDescripcion(), alternar ? datoTextoAlt : datoTexto);
                         escribirCelda(row, 4, tipoTablero, alternar ? datoTextoAlt : datoTexto);
                         escribirCelda(row, 5, tamanioTablero, alternar ? datoTextoAlt : datoTexto);
-                        escribirCelda(row, 6, "", alternar ? datoTextoAlt : datoTexto);
+                        escribirCelda(row, 6, obs.getTexto().trim(), alternar ? datoTextoAlt : datoTexto);
                         escribirCelda(row, 7, "", alternar ? datoCentradoAlt : datoCentrado);
                         escribirCelda(row, 8, "", alternar ? datoMonedaAlt : datoMoneda);
                         escribirCelda(row, 9, ayudantesTarea(tarea), alternar ? datoTextoAlt : datoTexto);
                         alternar = !alternar;
-                    } else {
-                        for (ObservacionTablero obs : observaciones) {
-                            Row row = sheet.createRow(fila++);
-                            escribirCelda(row, 1, informe.getNivel(), alternar ? datoCentradoAlt : datoCentrado);
-                            escribirCelda(row, 2, informe.getUbicacion(), alternar ? datoTextoAlt : datoTexto);
-                            escribirCelda(row, 3, informe.getDescripcion(), alternar ? datoTextoAlt : datoTexto);
-                            escribirCelda(row, 4, tipoTablero, alternar ? datoTextoAlt : datoTexto);
-                            escribirCelda(row, 5, tamanioTablero, alternar ? datoTextoAlt : datoTexto);
-                            escribirCelda(row, 6, obs.getTexto(), alternar ? datoTextoAlt : datoTexto);
-                            escribirCelda(row, 7, "", alternar ? datoCentradoAlt : datoCentrado);
-                            escribirCelda(row, 8, "", alternar ? datoMonedaAlt : datoMoneda);
-                            escribirCelda(row, 9, ayudantesTarea(tarea), alternar ? datoTextoAlt : datoTexto);
-                            alternar = !alternar;
-                        }
                     }
                 }
             }
@@ -308,7 +295,7 @@ public class DocumentoService {
             if (primerBloque) {
                 Row row = sheet.createRow(fila);
                 escribirCelda(row, 1,
-                        "No hay tareas finalizadas con tableros registrados para los filtros seleccionados.",
+                        "No hay tableros con comentarios escritos para los filtros seleccionados.",
                         datoTexto);
                 sheet.addMergedRegion(new CellRangeAddress(fila, fila, 1, 9));
             }
@@ -319,6 +306,13 @@ public class DocumentoService {
             throw new ApiException("No se pudo generar el archivo Excel: " + e.getMessage(),
                     org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    private List<ObservacionTablero> observacionesConTexto(InformeTablero informe) {
+        return informe.getObservaciones().stream()
+                .filter(observacion -> observacion.getTexto() != null && !observacion.getTexto().isBlank())
+                .sorted(Comparator.comparingInt(ObservacionTablero::getOrden))
+                .toList();
     }
 
     // ------------------------------------------------------------------
