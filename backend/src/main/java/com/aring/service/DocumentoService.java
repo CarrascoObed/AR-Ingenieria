@@ -29,7 +29,6 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.apache.poi.xwpf.usermodel.BreakType;
 import org.apache.poi.xwpf.usermodel.Document;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.TableRowHeightRule;
@@ -520,17 +519,12 @@ public class DocumentoService {
         try (XWPFDocument document = new XWPFDocument();
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
-            boolean primerBloque = true;
             boolean hayInformes = false;
             for (Tarea tarea : tareas) {
                 List<InformeTablero> informes = informeTableroRepository.findAllByTareaIdOrderByIdAsc(tarea.getId());
                 if (informes.isEmpty()) {
                     continue;
                 }
-                if (!primerBloque) {
-                    saltoPagina(document);
-                }
-                primerBloque = false;
                 agregarInformeTarea(document, tarea, informes, "tarea_" + tarea.getId() + "_");
                 hayInformes = true;
             }
@@ -557,12 +551,9 @@ public class DocumentoService {
     private void agregarInformeTarea(XWPFDocument document, Tarea tarea, List<InformeTablero> informes,
                                      String prefijoMarcador) {
         agregarPortada(document, tarea);
-        saltoPagina(document);
         agregarIndice(document, prefijoMarcador);
-        saltoPagina(document);
         agregarContenidoGeneral(document, tarea, prefijoMarcador);
 
-        saltoPagina(document);
         tituloSeccion(document, "3.3 Pautas de revisión para tableros", prefijoMarcador + "seccion_6");
         for (int indice = 0; indice < informes.size(); indice++) {
             agregarSeccionTablero(document, tarea, informes.get(indice), indice + 1);
@@ -1495,10 +1486,6 @@ public class DocumentoService {
         if (id != null) {
             parrafo.getCTP().addNewBookmarkEnd().setId(id);
         }
-    }
-
-    private void saltoPagina(XWPFDocument document) {
-        document.createParagraph().createRun().addBreak(BreakType.PAGE);
     }
 
     private void parrafoCuerpo(XWPFDocument document, String texto) {
