@@ -55,7 +55,6 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblCellMar;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STBorder;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.STOnOff;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STFldCharType;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblLayoutType;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblWidth;
@@ -827,7 +826,6 @@ public class DocumentoService {
         XWPFTableRow cabecera = tabla.getRow(0);
         var propiedadesCabecera = cabecera.getCtRow().addNewTrPr();
         propiedadesCabecera.addNewCantSplit();
-        propiedadesCabecera.addNewTblHeader().setVal(STOnOff.TRUE);
         configurarCeldaChecklist(cabecera.getCell(0), "Punto revisado", "4B2495", "FFFFFF", true, false, "6500");
         configurarCeldaChecklist(cabecera.getCell(1), "Resultado", "4B2495", "FFFFFF", true, true, "2545");
 
