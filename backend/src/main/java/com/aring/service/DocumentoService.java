@@ -765,7 +765,7 @@ public class DocumentoService {
 
         agregarTablaChecklist(document, informe);
 
-        tituloSubseccion(document, "Detalles");
+        tituloSubseccion(document, "Observaciones generales");
         List<ObservacionTablero> observaciones = new ArrayList<>(informe.getObservaciones());
         observaciones.sort(Comparator.comparingInt(ObservacionTablero::getOrden));
         if (observaciones.isEmpty()) {
