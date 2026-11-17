@@ -383,9 +383,19 @@ object ChecklistCommentSuggestions {
         "mono_c9" to termografia
     )
 
+    val ubicaciones = listOf(
+        "Sala de grupo electrógeno",
+        "Sala eléctrica",
+        "Shaft eléctrico",
+        "Lavandería",
+        "Cowork",
+        "Gimnasio"
+    )
+
     val observacionesGenerales = listOf(
         "Falta señal de riesgo eléctrico.",
-        "Faltan () separadores de fases."
+        "Faltan (N°) separadores de fases.",
+        "Faltan (N°) falsos polos."
     )
 
     fun paraItem(itemId: String): List<String> = porItem[itemId].orEmpty()
