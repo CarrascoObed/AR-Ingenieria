@@ -802,19 +802,17 @@ public class DocumentoService {
                 default -> "333333";
             };
             agregarFilaFicha(tabla.getRow(i + 1), texto(item.getLabel()), estado, i,
-                    observacionChecklist(informe, item), fondoEstado, colorEstado);
+                    null, fondoEstado, colorEstado);
         }
     }
 
     private void agregarObservacionesTablero(XWPFDocument document, InformeTablero informe) {
         tituloBloqueTablero(document, "Observaciones generales");
-        List<ChecklistTablero> checklist = new ArrayList<>(informe.getChecklist());
         List<ObservacionTablero> observaciones = new ArrayList<>(informe.getObservaciones());
         observaciones.sort(Comparator.comparingInt(ObservacionTablero::getOrden));
         List<String> generales = observaciones.stream()
                 .map(observacion -> texto(observacion.getTexto()).trim())
                 .filter(texto -> !texto.isBlank())
-                .filter(texto -> checklist.stream().noneMatch(item -> esObservacionChecklist(texto, item)))
                 .toList();
         if (generales.isEmpty()) {
             parrafoCuerpo(document, "Sin observaciones generales registradas.");
@@ -899,23 +897,6 @@ public class DocumentoService {
             nota.setFontSize(8);
             nota.setColor("626B7A");
         }
-    }
-
-    private String observacionChecklist(InformeTablero informe, ChecklistTablero item) {
-        return informe.getObservaciones().stream()
-                .sorted(Comparator.comparingInt(ObservacionTablero::getOrden))
-                .map(observacion -> texto(observacion.getTexto()).trim())
-                .filter(observacion -> esObservacionChecklist(observacion, item))
-                .map(observacion -> observacion.substring(texto(item.getLabel()).trim().length() + 1).trim())
-                .filter(observacion -> !observacion.isBlank())
-                .reduce((primera, siguiente) -> primera + " · " + siguiente)
-                .orElse(null);
-    }
-
-    private boolean esObservacionChecklist(String observacion, ChecklistTablero item) {
-        String etiqueta = texto(item.getLabel()).trim();
-        return !etiqueta.isBlank()
-                && observacion.regionMatches(true, 0, etiqueta + ":", 0, etiqueta.length() + 1);
     }
 
     private String estadoChecklist(String estado) {
