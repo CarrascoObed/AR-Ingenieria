@@ -1186,24 +1186,16 @@ public class DocumentoService {
     }
 
     private void agregarRespaldoTermografia(XWPFDocument document, List<InformeTablero> informes) {
-        boolean hayFotos = false;
-        for (int indice = 0; indice < informes.size(); indice++) {
-            InformeTablero informe = informes.get(indice);
-            List<FotoInforme> fotos = fotosTermografia(informe);
-            if (fotos.isEmpty()) {
-                continue;
-            }
-            if (hayFotos) {
-                saltoPagina(document);
-            }
-            tituloAuxiliar(document, "Tablero " + (indice + 1) + " · " + nombreTablero(informe));
-            agregarGaleria(document, fotos, 6, 2.8, 4.98);
-            hayFotos = true;
+        List<FotoInforme> fotos = new ArrayList<>();
+        for (InformeTablero informe : informes) {
+            fotos.addAll(fotosTermografia(informe));
         }
-        if (!hayFotos) {
+        if (fotos.isEmpty()) {
             parrafoCuerpo(document,
                     "No se registraron fotografías termográficas para los tableros de este mantenimiento.");
+            return;
         }
+        agregarGaleria(document, fotos, 6, 2.8, 4.98);
     }
 
     private List<FotoInforme> fotosTermografia(InformeTablero informe) {
