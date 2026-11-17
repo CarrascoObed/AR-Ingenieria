@@ -10,6 +10,8 @@ public interface TecnicoRepository extends JpaRepository<Tecnico, Long> {
 
     boolean existsByRut(String rut);
 
+    boolean existsByRutAndIdNot(String rut, Long id);
+
     Optional<Tecnico> findByRut(String rut);
 
     List<Tecnico> findAllByOrderByNombreAscApellidoAsc();

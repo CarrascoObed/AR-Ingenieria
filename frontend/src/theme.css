@@ -356,6 +356,42 @@ input, select, textarea {
   box-shadow: 0 0 0 3px rgba(108, 60, 233, 0.15);
 }
 
+.telefono-prefijado {
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1.5px solid var(--borde-suave);
+  border-radius: 10px;
+  background: var(--blanco);
+}
+
+.telefono-prefijado:focus-within {
+  border-color: var(--violeta);
+  box-shadow: 0 0 0 3px rgba(108, 60, 233, 0.15);
+}
+
+.telefono-prefijo {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-right: 1px solid var(--borde-suave);
+  background: var(--fondo-gris);
+  color: var(--texto-oscuro);
+  font-weight: 600;
+}
+
+.campo .telefono-prefijado input {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.campo .telefono-prefijado + small {
+  color: var(--texto-gris);
+  font-size: 12px;
+}
+
 .campo textarea {
   resize: vertical;
   min-height: 80px;

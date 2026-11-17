@@ -1402,7 +1402,10 @@ public class DocumentoService {
                 parrafo.setSpacingBefore(0);
                 parrafo.setSpacingAfter(0);
                 try {
-                    byte[] bytes = foto.bytes();
+                    byte[] bytes = normalizarFotoVertical(foto.bytes(), anchoFotoCm / altoFotoCm);
+                    if (bytes == null) {
+                        bytes = foto.bytes();
+                    }
                     int tipo = tipoImagen(bytes);
                     int[] dimensiones = dimensionesFoto(bytes, anchoCeldaEMU, altoFotoEMU);
                     XWPFRun run = parrafo.createRun();
@@ -1425,6 +1428,54 @@ public class DocumentoService {
                     runPie.setColor("5A6275");
                 }
             }
+        }
+    }
+
+    private byte[] normalizarFotoVertical(byte[] bytes, double proporcionObjetivo) {
+        try {
+            BufferedImage original = ImageIO.read(new ByteArrayInputStream(bytes));
+            if (original == null || original.getWidth() <= 0 || original.getHeight() <= 0) {
+                return null;
+            }
+
+            BufferedImage vertical = original;
+            if (original.getWidth() > original.getHeight()) {
+                vertical = new BufferedImage(original.getHeight(), original.getWidth(), BufferedImage.TYPE_INT_RGB);
+                Graphics2D rotacion = vertical.createGraphics();
+                rotacion.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+                rotacion.setColor(Color.WHITE);
+                rotacion.fillRect(0, 0, vertical.getWidth(), vertical.getHeight());
+                rotacion.translate(vertical.getWidth(), 0);
+                rotacion.rotate(Math.PI / 2);
+                rotacion.drawImage(original, 0, 0, null);
+                rotacion.dispose();
+            }
+
+            int x = 0;
+            int y = 0;
+            int ancho = vertical.getWidth();
+            int alto = vertical.getHeight();
+            double proporcion = (double) ancho / alto;
+            if (proporcion > proporcionObjetivo) {
+                ancho = Math.max(1, (int) Math.round(alto * proporcionObjetivo));
+                x = (vertical.getWidth() - ancho) / 2;
+            } else if (proporcion < proporcionObjetivo) {
+                alto = Math.max(1, (int) Math.round(ancho / proporcionObjetivo));
+                y = (vertical.getHeight() - alto) / 2;
+            }
+
+            BufferedImage recorte = new BufferedImage(ancho, alto, BufferedImage.TYPE_INT_RGB);
+            Graphics2D graphics = recorte.createGraphics();
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            graphics.drawImage(vertical, 0, 0, ancho, alto, x, y, x + ancho, y + alto, null);
+            graphics.dispose();
+
+            try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                ImageIO.write(recorte, "jpg", out);
+                return out.toByteArray();
+            }
+        } catch (Exception ignorada) {
+            return null;
         }
     }
 

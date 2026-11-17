@@ -19,8 +19,48 @@ const VACIO = {
   password: '',
   contactoNombre: '',
   contactoApellido: '',
-  contactoTelefono: '',
+  contactoTelefono: '+569',
 };
+
+const soloDigitos = (valor, maximo = 8) => String(valor || '').replace(/\D/g, '').slice(0, maximo);
+
+const rutBase = (valor) => {
+  const rut = String(valor || '').trim();
+  const antesDelDigitoVerificador = rut.includes('-') ? rut.split('-')[0] : rut;
+  return soloDigitos(antesDelDigitoVerificador, 8);
+};
+
+const telefonoLocal = (valor) => {
+  const digitos = String(valor || '').replace(/\D/g, '');
+  if (digitos.startsWith('569')) return digitos.slice(3, 11);
+  if (digitos.startsWith('56')) {
+    const nacional = digitos.slice(2);
+    return (nacional.startsWith('9') ? nacional.slice(1) : nacional).slice(0, 8);
+  }
+  if (digitos.startsWith('9') && digitos.length === 9) return digitos.slice(1);
+  return digitos.slice(0, 8);
+};
+
+function CampoTelefono({ value, onChange }) {
+  return (
+    <div className="campo">
+      <label>Número telefónico</label>
+      <div className="telefono-prefijado">
+        <span className="telefono-prefijo">+569</span>
+        <input
+          type="tel"
+          inputMode="numeric"
+          autoComplete="tel-national"
+          maxLength={8}
+          value={telefonoLocal(value)}
+          onChange={(e) => onChange(`+569${soloDigitos(e.target.value, 8)}`)}
+          placeholder="12345678"
+        />
+      </div>
+      <small>Ingrese los 8 dígitos del número móvil.</small>
+    </div>
+  );
+}
 
 export default function Tecnicos() {
   const [tecnicos, setTecnicos] = useState([]);
@@ -56,7 +96,10 @@ export default function Tecnicos() {
     cargar();
   }, []);
 
-  const formCompleto = Object.values(form).every((v) => v.trim() !== '');
+  const formCompleto = Object.values(form).every((v) => String(v).trim() !== '');
+  const telefonoCrearValido = telefonoLocal(form.contactoTelefono).length === 8;
+  const rutCrearValido = /^\d{1,8}$/.test(form.rut);
+  const crearValido = formCompleto && telefonoCrearValido && rutCrearValido;
 
   const abrirCrear = () => {
     setForm(VACIO);
@@ -66,7 +109,7 @@ export default function Tecnicos() {
 
   const crearTecnico = async (e) => {
     e.preventDefault();
-    if (!formCompleto) return;
+    if (!crearValido) return;
     setCreando(true);
     setError('');
     try {
@@ -85,16 +128,18 @@ export default function Tecnicos() {
   const abrirEditar = (t) => {
     setEditando(t);
     setFormEdit({
+      rut: rutBase(t.rut),
       password: '',
       contactoNombre: t.contactoNombre || '',
       contactoApellido: t.contactoApellido || '',
-      contactoTelefono: t.contactoTelefono || '',
+      contactoTelefono: `+569${telefonoLocal(t.contactoTelefono)}`,
     });
     setError('');
   };
 
   const editarCompleto = formEdit
-    ? formEdit.password.trim() !== '' &&
+    ? /^\d{1,8}$/.test(formEdit.rut) &&
+      telefonoLocal(formEdit.contactoTelefono).length === 8 &&
       formEdit.contactoNombre.trim() !== '' &&
       formEdit.contactoApellido.trim() !== '' &&
       formEdit.contactoTelefono.trim() !== ''
@@ -211,8 +256,14 @@ export default function Tecnicos() {
             </div>
             <div className="fila">
               <div className="campo">
-                <label>RUT del técnico</label>
-                <input value={form.rut} onChange={actualizar('rut')} placeholder="Ej: 12345678-9" />
+                <label>RUT del técnico (sin guion ni dígito verificador)</label>
+                <input
+                  inputMode="numeric"
+                  maxLength={8}
+                  value={form.rut}
+                  onChange={(e) => setForm((f) => ({ ...f, rut: soloDigitos(e.target.value, 8) }))}
+                  placeholder="Ej: 12345678"
+                />
               </div>
               <div className="campo">
                 <label>Contraseña del técnico</label>
@@ -245,14 +296,10 @@ export default function Tecnicos() {
                 />
               </div>
             </div>
-            <div className="campo">
-              <label>Número telefónico</label>
-              <input
-                value={form.contactoTelefono}
-                onChange={actualizar('contactoTelefono')}
-                placeholder="Ej: +56 9 1234 5678"
-              />
-            </div>
+            <CampoTelefono
+              value={form.contactoTelefono}
+              onChange={(contactoTelefono) => setForm((f) => ({ ...f, contactoTelefono }))}
+            />
           </SeccionFormulario>
 
           <div className="modal-pie">
@@ -263,7 +310,7 @@ export default function Tecnicos() {
             >
               Cancelar
             </button>
-            <button type="submit" className="btn btn-primario" disabled={!formCompleto || creando}>
+            <button type="submit" className="btn btn-primario" disabled={!crearValido || creando}>
               <UserPlus size={18} />
               Crear técnico
             </button>
@@ -282,6 +329,18 @@ export default function Tecnicos() {
             <p style={{ color: 'var(--texto-gris)', marginTop: 0 }}>
               Editar {editando?.nombre} {editando?.apellido} (RUT {editando?.rut})
             </p>
+            <SeccionFormulario titulo="Datos del técnico">
+              <div className="campo">
+                <label>RUT del técnico (sin guion ni dígito verificador)</label>
+                <input
+                  inputMode="numeric"
+                  maxLength={8}
+                  value={formEdit.rut}
+                  onChange={(e) => setFormEdit((f) => ({ ...f, rut: soloDigitos(e.target.value, 8) }))}
+                  placeholder="Ej: 12345678"
+                />
+              </div>
+            </SeccionFormulario>
             <SeccionFormulario titulo="Datos de contacto de emergencia">
               <div className="fila">
                 <div className="campo">
@@ -303,25 +362,20 @@ export default function Tecnicos() {
                   />
                 </div>
               </div>
-              <div className="campo">
-                <label>Número telefónico</label>
-                <input
-                  value={formEdit.contactoTelefono}
-                  onChange={(e) =>
-                    setFormEdit((f) => ({ ...f, contactoTelefono: e.target.value }))
-                  }
-                />
-              </div>
+              <CampoTelefono
+                value={formEdit.contactoTelefono}
+                onChange={(contactoTelefono) => setFormEdit((f) => ({ ...f, contactoTelefono }))}
+              />
             </SeccionFormulario>
 
-            <SeccionFormulario titulo="Contraseña del técnico">
+            <SeccionFormulario titulo="Contraseña del técnico (opcional)">
               <div className="campo">
                 <label>Nueva contraseña</label>
                 <input
                   type="password"
                   value={formEdit.password}
                   onChange={(e) => setFormEdit((f) => ({ ...f, password: e.target.value }))}
-                  placeholder="Escriba la nueva contraseña"
+                  placeholder="Dejar en blanco para conservar la actual"
                 />
               </div>
             </SeccionFormulario>

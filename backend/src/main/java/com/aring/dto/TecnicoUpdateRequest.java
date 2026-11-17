@@ -8,7 +8,9 @@ import lombok.Setter;
 @Setter
 public class TecnicoUpdateRequest {
 
-    @NotBlank(message = "La contraseña es obligatoria")
+    @NotBlank(message = "El RUT del técnico es obligatorio")
+    private String rut;
+
     private String password;
 
     @NotBlank(message = "El nombre del contacto de emergencia es obligatorio")
