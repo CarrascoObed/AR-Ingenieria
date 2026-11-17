@@ -107,6 +107,18 @@ public class DocumentoService {
     private static final Set<String> VARIABLES_TERMOGRAFIA = Set.of(
             "mono_termografia", "tri_termografia", "tri_temp");
     private static final Set<String> ITEMS_TERMOGRAFIA = Set.of("mono_c9", "tri_c21");
+    private static final List<String> ENTRADAS_INDICE = List.of(
+            "Declaración de Confidencialidad",
+            "1. Introducción.",
+            "2. Objetivos del Mantenimiento.",
+            "3. Procedimiento general del mantenimiento.",
+            "3.1 Instrumentación para el servicio",
+            "3.2 Procedimiento de mantenimiento.",
+            "3.3 Pautas de revisión para tableros",
+            "4. Levantamiento, valorización y condiciones de pago.",
+            "6. Respaldo fotográfico termografía",
+            "7. Resumen de mantenimiento y observaciones.",
+            "8. Agradecimientos.");
 
     private static final long ANCHO_PORTADA_EMU = cmToEmu(15.59);
     private static final long ALTO_PORTADA_EMU = cmToEmu(12.44);
@@ -519,7 +531,7 @@ public class DocumentoService {
                     saltoPagina(document);
                 }
                 primerBloque = false;
-                agregarInformeTarea(document, tarea, informes);
+                agregarInformeTarea(document, tarea, informes, "tarea_" + tarea.getId() + "_");
                 hayInformes = true;
             }
 
@@ -533,6 +545,7 @@ public class DocumentoService {
                 agregarEncabezadoLogo(document);
             }
 
+            document.enforceUpdateFields();
             document.write(out);
             return out.toByteArray();
         } catch (Exception e) {
@@ -541,31 +554,32 @@ public class DocumentoService {
         }
     }
 
-    private void agregarInformeTarea(XWPFDocument document, Tarea tarea, List<InformeTablero> informes) {
+    private void agregarInformeTarea(XWPFDocument document, Tarea tarea, List<InformeTablero> informes,
+                                     String prefijoMarcador) {
         agregarPortada(document, tarea);
         saltoPagina(document);
-        agregarIndice(document);
+        agregarIndice(document, prefijoMarcador);
         saltoPagina(document);
-        agregarContenidoGeneral(document, tarea);
+        agregarContenidoGeneral(document, tarea, prefijoMarcador);
 
         saltoPagina(document);
-        tituloSeccion(document, "3.3 Pautas de revisión para tableros");
+        tituloSeccion(document, "3.3 Pautas de revisión para tableros", prefijoMarcador + "seccion_6");
         for (int indice = 0; indice < informes.size(); indice++) {
             agregarSeccionTablero(document, tarea, informes.get(indice), indice + 1);
         }
 
-        tituloSeccion(document, "4. Levantamiento, valorización y condiciones de pago.");
+        tituloSeccion(document, "4. Levantamiento, valorización y condiciones de pago.", prefijoMarcador + "seccion_7");
         parrafoCuerpo(document,
                 "Del mantenimiento realizado se desprende el listado de los activos intervenidos; el detalle "
                         + "valorizado del servicio y sus condiciones de pago se acompañan como anexo de este informe.");
 
-        tituloSeccion(document, "6. Respaldo fotográfico termografía");
+        tituloSeccion(document, "6. Respaldo fotográfico termografía", prefijoMarcador + "seccion_8");
         agregarRespaldoTermografia(document, informes);
 
-        tituloSeccion(document, "7. Resumen de mantenimiento y observaciones.");
+        tituloSeccion(document, "7. Resumen de mantenimiento y observaciones.", prefijoMarcador + "seccion_9");
         agregarResumenMantenimiento(document, informes);
 
-        tituloSeccion(document, "8. Agradecimientos.");
+        tituloSeccion(document, "8. Agradecimientos.", prefijoMarcador + "seccion_10");
         parrafoCuerpo(document,
                 "Agradeciendo su interés por nuestros productos y/o servicios, quedamos a vuestra disposición, "
                         + "en caso de requerir mayor información, no dude en contactar a nuestra empresa al correo: "
@@ -639,7 +653,7 @@ public class DocumentoService {
         run.setColor("1B6DC1");
     }
 
-    private void agregarIndice(XWPFDocument document) {
+    private void agregarIndice(XWPFDocument document, String prefijoMarcador) {
         XWPFParagraph titulo = document.createParagraph();
         titulo.setSpacingBefore(120);
         titulo.setSpacingAfter(200);
@@ -650,64 +664,85 @@ public class DocumentoService {
         run.setFontSize(14);
         run.setColor("1B6DC1");
 
-        String[] entradas = {
-                "Declaración de Confidencialidad",
-                "1. Introducción.",
-                "2. Objetivos del Mantenimiento.",
-                "3. Procedimiento general del mantenimiento.",
-                "3.1 Instrumentación para el servicio",
-                "3.2 Procedimiento de mantenimiento.",
-                "3.3 Pautas de revisión para tableros",
-                "4. Levantamiento, valorización y condiciones de pago.",
-                "6. Respaldo fotográfico termografía",
-                "7. Resumen de mantenimiento y observaciones.",
-                "8. Agradecimientos."
-        };
-        for (String entrada : entradas) {
-            XWPFParagraph parrafo = document.createParagraph();
-            parrafo.setSpacingAfter(60);
-            XWPFRun runEntrada = parrafo.createRun();
-            runEntrada.setText(entrada);
+        XWPFTable indice = document.createTable(ENTRADAS_INDICE.size(), 2);
+        indice.setWidth("100%");
+        CTTblPr propiedades = indice.getCTTbl().getTblPr();
+        CTTblBorders bordes = propiedades.addNewTblBorders();
+        for (CTBorder borde : List.of(
+                bordes.addNewTop(), bordes.addNewLeft(), bordes.addNewBottom(), bordes.addNewRight(),
+                bordes.addNewInsideH(), bordes.addNewInsideV())) {
+            borde.setVal(STBorder.NIL);
+        }
+        for (int i = 0; i < ENTRADAS_INDICE.size(); i++) {
+            XWPFTableRow fila = indice.getRow(i);
+            XWPFTableCell celdaTitulo = fila.getCell(0);
+            XWPFTableCell celdaPagina = fila.getCell(1);
+            celdaTitulo.setWidth("8500");
+            celdaPagina.setWidth("600");
+            XWPFParagraph parrafoTitulo = celdaTitulo.getParagraphs().get(0);
+            parrafoTitulo.setSpacingAfter(70);
+            XWPFRun runEntrada = parrafoTitulo.createRun();
+            runEntrada.setText(ENTRADAS_INDICE.get(i));
             runEntrada.setFontFamily("Arial");
             runEntrada.setFontSize(10);
+
+            XWPFParagraph parrafoPagina = celdaPagina.getParagraphs().get(0);
+            parrafoPagina.setAlignment(ParagraphAlignment.RIGHT);
+            parrafoPagina.setSpacingAfter(70);
+            agregarCampoPagina(parrafoPagina, prefijoMarcador + "seccion_" + i);
         }
     }
 
-    private void agregarContenidoGeneral(XWPFDocument document, Tarea tarea) {
+    private void agregarCampoPagina(XWPFParagraph parrafo, String marcador) {
+        XWPFRun inicio = parrafo.createRun();
+        inicio.getCTR().addNewFldChar().setFldCharType(STFldCharType.BEGIN);
+        XWPFRun instruccion = parrafo.createRun();
+        instruccion.getCTR().addNewInstrText().setStringValue("PAGEREF " + marcador + " \\h");
+        XWPFRun separador = parrafo.createRun();
+        separador.getCTR().addNewFldChar().setFldCharType(STFldCharType.SEPARATE);
+        XWPFRun valor = parrafo.createRun();
+        valor.setText("1");
+        valor.setFontFamily("Arial");
+        valor.setFontSize(10);
+        XWPFRun fin = parrafo.createRun();
+        fin.getCTR().addNewFldChar().setFldCharType(STFldCharType.END);
+    }
+
+    private void agregarContenidoGeneral(XWPFDocument document, Tarea tarea, String prefijoMarcador) {
         Cliente cliente = tarea.getCliente();
         String recinto = cliente != null && !texto(cliente.getNombreRecinto()).isBlank()
                 ? texto(cliente.getNombreRecinto())
                 : texto(tarea.getNombreRecinto());
 
-        tituloSeccion(document, "Declaración de Confidencialidad");
+        tituloSeccion(document, "Declaración de Confidencialidad", prefijoMarcador + "seccion_0");
         parrafoCuerpo(document,
                 "La presente documentación y material de soporte contiene información confidencial. "
                         + "Este material puede ser impreso o fotocopiado para uso en la evaluación del servicio realizado por "
                         + "AR ingeniería eléctrica spa, pero no compartido con terceros.");
 
-        tituloSeccion(document, "1. Introducción.");
+        tituloSeccion(document, "1. Introducción.", prefijoMarcador + "seccion_1");
         parrafoCuerpo(document,
                 "El presente informe tiene el objetivo de concentrar los resultados obtenidos del trabajo de mantenimiento "
                         + "preventivo, realizado por la empresa AR Ingeniería SpA a los tableros de espacio común de "
                         + (recinto.isBlank() ? "la propiedad" : recinto)
                         + "; individualizados en el punto 3.3 de este informe.");
 
-        tituloSeccion(document, "2. Objetivos del Mantenimiento.");
+        tituloSeccion(document, "2. Objetivos del Mantenimiento.", prefijoMarcador + "seccion_2");
         parrafoCuerpo(document,
                 "El mantenimiento tiene por propósito extender la vida útil de los activos eléctricos del edificio. "
                         + "También debe ser capaz de generar ahorros a largo plazo, principalmente derivados de la alta "
                         + "continuidad operacional de los recintos, control de fallas y bajo costo de reparaciones "
                         + "(gestionados a través de los mantenimientos preventivos).");
 
-        tituloSeccion(document, "3. Procedimiento general del mantenimiento.");
-        tituloSubseccion(document, "3.1 Instrumentación para el servicio");
+        tituloSeccion(document, "3. Procedimiento general del mantenimiento.", prefijoMarcador + "seccion_3");
+        tituloSubseccion(document, "3.1 Instrumentación para el servicio", prefijoMarcador + "seccion_4");
         parrafoCuerpo(document,
                 "Para el desarrollo de las actividades de mantenimiento, es necesario la aplicación de instrumentos "
                         + "especializados tales como cámara termográfica, analizador de redes, probador de aislación e "
                         + "instrumentación de puesta en servicio de nuevas instalaciones; elementos que AR Ingeniería SpA. "
                         + "ha adquirido de las empresas que cuentan con mayor renombre en el rubro (Uni-t, Fluke y Hioki).");
         agregarInstrumentos(document);
-        tituloSubseccion(document, "3.2 Procedimiento de mantenimiento.");
+        tituloSubseccion(document, "3.2 Procedimiento de mantenimiento.", prefijoMarcador + "seccion_5");
         parrafoCuerpo(document,
                 "El procedimiento de mantenimiento preventivo, aplicado a los tableros eléctricos, se subdivide en tres "
                         + "áreas de ejecución. Cada una de las áreas, se centra en pautas de chequeo que aseguran la revisión "
@@ -1399,27 +1434,67 @@ public class DocumentoService {
     // ------------------------------------------------------------------
 
     private void tituloSeccion(XWPFDocument document, String texto) {
+        tituloSeccion(document, texto, null);
+    }
+
+    private void tituloSeccion(XWPFDocument document, String texto, String marcador) {
         XWPFParagraph parrafo = document.createParagraph();
         parrafo.setSpacingBefore(240);
         parrafo.setSpacingAfter(80);
+        BigInteger bookmarkId = agregarInicioMarcadorIndice(parrafo, marcador);
         XWPFRun run = parrafo.createRun();
         run.setText(texto);
         run.setBold(false);
         run.setFontFamily("Arial");
         run.setFontSize(14);
         run.setColor("1B6DC1");
+        agregarFinMarcadorIndice(parrafo, bookmarkId);
     }
 
     private void tituloSubseccion(XWPFDocument document, String texto) {
+        tituloSubseccion(document, texto, null);
+    }
+
+    private void tituloSubseccion(XWPFDocument document, String texto, String marcador) {
         XWPFParagraph parrafo = document.createParagraph();
         parrafo.setSpacingBefore(160);
         parrafo.setSpacingAfter(60);
+        BigInteger bookmarkId = agregarInicioMarcadorIndice(parrafo, marcador);
         XWPFRun run = parrafo.createRun();
         run.setText(texto);
         run.setBold(false);
         run.setFontFamily("Arial");
         run.setFontSize(13);
         run.setColor("1B6DC1");
+        agregarFinMarcadorIndice(parrafo, bookmarkId);
+    }
+
+    private BigInteger agregarInicioMarcadorIndice(XWPFParagraph parrafo, String marcador) {
+        if (marcador == null || marcador.isBlank()) {
+            return null;
+        }
+        int separador = marcador.indexOf("_seccion_");
+        if (!marcador.startsWith("tarea_") || separador < 0) {
+            return null;
+        }
+        BigInteger id;
+        try {
+            BigInteger tareaId = new BigInteger(marcador.substring("tarea_".length(), separador));
+            BigInteger indiceSeccion = new BigInteger(marcador.substring(separador + "_seccion_".length()));
+            id = tareaId.multiply(BigInteger.valueOf(100)).add(indiceSeccion).add(BigInteger.ONE);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+        var inicio = parrafo.getCTP().addNewBookmarkStart();
+        inicio.setId(id);
+        inicio.setName(marcador);
+        return id;
+    }
+
+    private void agregarFinMarcadorIndice(XWPFParagraph parrafo, BigInteger id) {
+        if (id != null) {
+            parrafo.getCTP().addNewBookmarkEnd().setId(id);
+        }
     }
 
     private void saltoPagina(XWPFDocument document) {
