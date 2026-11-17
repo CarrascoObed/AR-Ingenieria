@@ -51,7 +51,11 @@ fun MonofasicoRegistroScreen(
                 vm.setDescripcion(it)
             }
             Spacing12()
-            FormTextField("Ubicación", state.registration.ubicacion) { vm.setUbicacion(it) }
+            FormTextField(
+                "Ubicación",
+                state.registration.ubicacion,
+                sugerencias = ChecklistCommentSuggestions.ubicaciones
+            ) { vm.setUbicacion(it) }
             Spacing12()
             FormTextField("Piso", state.registration.nivel, keyboardType = KeyboardType.Number) { vm.setNivel(it) }
             Spacing16()

@@ -290,8 +290,27 @@ fun FormTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     placeholder: String? = null,
     capitalization: KeyboardCapitalization = KeyboardCapitalization.Sentences,
+    sugerencias: List<String> = emptyList(),
     onValueChange: (String) -> Unit
 ) {
+    if (sugerencias.isNotEmpty()) {
+        CampoTextoConSugerencias(
+            label = label,
+            placeholder = placeholder.orEmpty(),
+            value = value,
+            sugerencias = sugerencias,
+            onValueChange = onValueChange,
+            modifier = modifier,
+            singleLine = true,
+            minLines = 1,
+            maxLines = 1,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = keyboardType,
+                capitalization = if (keyboardType == KeyboardType.Text) capitalization else KeyboardCapitalization.None
+            )
+        )
+        return
+    }
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
@@ -361,11 +380,14 @@ fun ObservacionesSection(
             }
         }
         Spacer(Modifier.height(4.dp))
-        CampoComentarioConSugerencias(
+        CampoTextoConSugerencias(
+            label = null,
             placeholder = "Escriba aquí sus observaciones...",
             value = texto,
             sugerencias = sugerencias,
-            onValueChange = { onValueChange(index, it) }
+            onValueChange = { onValueChange(index, it) },
+            minLines = 2,
+            maxLines = 4
         )
         Spacer(Modifier.height(16.dp))
     }
@@ -383,14 +405,19 @@ fun ObservacionesSection(
 }
 
 @Composable
-private fun CampoComentarioConSugerencias(
+private fun CampoTextoConSugerencias(
+    label: String?,
     placeholder: String,
     value: String,
     sugerencias: List<String>,
     onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    singleLine: Boolean = false,
+    minLines: Int = 2,
+    maxLines: Int = 4,
+    keyboardOptions: KeyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember(sugerencias) { mutableStateOf(sugerencias.isNotEmpty() && value.isBlank()) }
     Column(modifier.fillMaxWidth()) {
         if (expanded && sugerencias.isNotEmpty()) {
             Card(
@@ -417,7 +444,10 @@ private fun CampoComentarioConSugerencias(
                     )
                     sugerencias.forEach { sugerencia ->
                         TextButton(
-                            onClick = { onValueChange(sugerencia) },
+                            onClick = {
+                                onValueChange(sugerencia)
+                                expanded = false
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 42.dp),
@@ -433,18 +463,32 @@ private fun CampoComentarioConSugerencias(
                     }
                 }
             }
+        } else if (sugerencias.isNotEmpty()) {
+            TextButton(
+                onClick = { expanded = true },
+                modifier = Modifier.align(Alignment.End),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+            ) {
+                Icon(Icons.Rounded.ArrowDropDown, contentDescription = null, tint = Violeta)
+                Text("Ver sugerencias", color = Violeta, fontSize = 12.sp)
+            }
         }
         OutlinedTextField(
             value = value,
-            onValueChange = onValueChange,
+            onValueChange = {
+                onValueChange(it)
+                if (it.isNotBlank()) expanded = false
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { focus ->
-                    if (focus.isFocused && sugerencias.isNotEmpty()) expanded = true
+                    if (focus.isFocused && sugerencias.isNotEmpty() && value.isBlank()) expanded = true
                 },
+            label = { label?.let { Text(it) } },
             placeholder = { Text(placeholder) },
-            minLines = 2,
-            maxLines = 4,
+            singleLine = singleLine,
+            minLines = minLines,
+            maxLines = maxLines,
             shape = RoundedCornerShape(12.dp),
             trailingIcon = if (sugerencias.isNotEmpty()) {
                 {
@@ -457,7 +501,7 @@ private fun CampoComentarioConSugerencias(
                     }
                 }
             } else null,
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+            keyboardOptions = keyboardOptions,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Violeta,
                 unfocusedBorderColor = BordeSuave,
