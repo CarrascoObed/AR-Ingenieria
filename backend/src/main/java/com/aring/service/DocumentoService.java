@@ -791,6 +791,7 @@ public class DocumentoService {
                 {"Equipo técnico de la tarea", equipoTecnicoTarea(tarea)},
         });
 
+        agregarTablaMediciones(document, informe);
         agregarTablaChecklist(document, informe);
 
         boolean tieneFotos = !fotosNoTermograficas(informe).isEmpty();
@@ -821,6 +822,46 @@ public class DocumentoService {
     private void saltoPagina(XWPFDocument document) {
         XWPFParagraph salto = document.createParagraph();
         salto.createRun().addBreak(BreakType.PAGE);
+    }
+
+    private void agregarTablaMediciones(XWPFDocument document, InformeTablero informe) {
+        tituloAuxiliar(document, "Variables medidas");
+        List<MedicionTablero> mediciones = new ArrayList<>(informe.getMediciones());
+        mediciones.sort(Comparator.comparingLong(medicion -> medicion.getId() == null ? 0L : medicion.getId()));
+
+        String[][] filas = new String[Math.max(mediciones.size(), 1)][2];
+        if (mediciones.isEmpty()) {
+            filas[0] = new String[] {"Mediciones", "Sin mediciones registradas."};
+        } else {
+            for (int i = 0; i < mediciones.size(); i++) {
+                MedicionTablero medicion = mediciones.get(i);
+                String variable = texto(medicion.getLabel());
+                String unidad = texto(medicion.getUnit()).trim();
+                if (!unidad.isBlank()) {
+                    variable += " (" + unidad + ")";
+                }
+                String valor = texto(medicion.getValor()).trim();
+                if (valor.isBlank()) {
+                    valor = "Sin registro";
+                } else if (!unidad.isBlank() && !valorIncluyeUnidad(valor, unidad)) {
+                    valor += " " + unidad;
+                }
+                filas[i] = new String[] {variable, valor};
+            }
+        }
+        agregarTablaDatos(document, filas);
+    }
+
+    private boolean valorIncluyeUnidad(String valor, String unidad) {
+        String normalizado = valor.toLowerCase(Locale.ROOT).replace(" ", "");
+        String unidadNormalizada = unidad.toLowerCase(Locale.ROOT).replace(" ", "");
+        return switch (unidadNormalizada) {
+            case "amp", "a", "ma", "amp/mamp" -> normalizado.endsWith("amp")
+                    || normalizado.endsWith("ma") || normalizado.endsWith("a");
+            case "v", "volt", "volts" -> normalizado.endsWith("v") || normalizado.endsWith("volt");
+            case "°c", "c", "celsius" -> normalizado.endsWith("°c") || normalizado.endsWith("celsius");
+            default -> normalizado.endsWith(unidadNormalizada);
+        };
     }
 
     private void agregarTablaChecklist(XWPFDocument document, InformeTablero informe) {

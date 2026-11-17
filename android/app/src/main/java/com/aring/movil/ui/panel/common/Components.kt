@@ -510,6 +510,24 @@ private fun CampoTextoConSugerencias(
     }
 }
 
+@Composable
+private fun CampoComentarioConSugerencias(
+    placeholder: String,
+    value: String,
+    sugerencias: List<String>,
+    onValueChange: (String) -> Unit
+) {
+    CampoTextoConSugerencias(
+        label = null,
+        placeholder = placeholder,
+        value = value,
+        sugerencias = sugerencias,
+        onValueChange = onValueChange,
+        minLines = 3,
+        maxLines = 5
+    )
+}
+
 private fun comentariosDesdeTexto(texto: String): List<String> {
     val comentarios = mutableListOf<String>()
     var inicio = 0
@@ -549,7 +567,7 @@ private fun ComentariosChecklist(
             placeholder = "Describa el detalle encontrado...",
             value = comentario,
             sugerencias = sugerencias,
-            onValueChange = { valor ->
+            onValueChange = { valor: String ->
                 val actualizados = comentarios.toMutableList().apply { this[index] = valor }
                 onChange(textoDesdeComentarios(actualizados))
             }
