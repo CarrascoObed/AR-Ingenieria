@@ -74,6 +74,9 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -84,6 +87,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -522,10 +526,58 @@ public class DocumentoService {
 
             document.enforceUpdateFields();
             document.write(out);
-            return out.toByteArray();
+            return actualizarIndiceConMotorPaginacion(out.toByteArray());
         } catch (Exception e) {
             throw new ApiException("No se pudo generar el archivo Word: " + e,
                     org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    private byte[] actualizarIndiceConMotorPaginacion(byte[] docx) throws Exception {
+        Path temporal = Files.createTempDirectory("aring-informe-");
+        Path entrada = temporal.resolve("informe-generado.docx");
+        Path salida = temporal.resolve("informe-actualizado.docx");
+        Path script = temporal.resolve("actualizar_indice.py");
+        try {
+            Files.write(entrada, docx);
+            try (InputStream recurso = getClass().getResourceAsStream("/tools/actualizar_indice_docx.py")) {
+                if (recurso == null) {
+                    throw new IllegalStateException("No se encontró el actualizador del índice del informe.");
+                }
+                Files.copy(recurso, script);
+            }
+
+            Process proceso = new ProcessBuilder("python3", script.toString(), entrada.toString(), salida.toString())
+                    .redirectErrorStream(true)
+                    .start();
+            boolean termino;
+            try {
+                termino = proceso.waitFor(180, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                proceso.destroyForcibly();
+                Thread.currentThread().interrupt();
+                throw e;
+            }
+            if (!termino) {
+                proceso.destroyForcibly();
+                throw new IllegalStateException("Se agotó el tiempo al calcular las páginas del informe.");
+            }
+
+            String salidaProceso = new String(proceso.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+            if (proceso.exitValue() != 0 || !Files.isRegularFile(salida) || Files.size(salida) == 0) {
+                throw new IllegalStateException("LibreOffice no pudo actualizar el índice del informe. " + salidaProceso);
+            }
+            return Files.readAllBytes(salida);
+        } finally {
+            try (var archivos = Files.walk(temporal)) {
+                archivos.sorted(Comparator.reverseOrder()).forEach(ruta -> {
+                    try {
+                        Files.deleteIfExists(ruta);
+                    } catch (Exception ignored) {
+                        // La limpieza temporal no debe ocultar el resultado de la generación.
+                    }
+                });
+            }
         }
     }
 

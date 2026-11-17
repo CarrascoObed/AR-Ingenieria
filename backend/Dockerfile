@@ -8,6 +8,9 @@ RUN mvn package -DskipTests -B
 
 # Etapa de ejecución
 FROM eclipse-temurin:21-jre
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libreoffice-writer python3-uno fonts-liberation \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/target/aring-backend-1.0.0.jar app.jar
 EXPOSE 8080
