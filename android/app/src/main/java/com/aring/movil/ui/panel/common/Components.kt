@@ -386,7 +386,7 @@ fun ObservacionesSection(
             value = texto,
             sugerencias = sugerencias,
             onValueChange = { onValueChange(index, it) },
-            minLines = 2,
+            minLines = 1,
             maxLines = 4
         )
         Spacer(Modifier.height(16.dp))
@@ -417,7 +417,7 @@ private fun CampoTextoConSugerencias(
     maxLines: Int = 4,
     keyboardOptions: KeyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
 ) {
-    var expanded by remember(sugerencias) { mutableStateOf(sugerencias.isNotEmpty() && value.isBlank()) }
+    var expanded by remember(sugerencias) { mutableStateOf(false) }
     Column(modifier.fillMaxWidth()) {
         if (expanded && sugerencias.isNotEmpty()) {
             Card(
@@ -482,7 +482,7 @@ private fun CampoTextoConSugerencias(
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { focus ->
-                    if (focus.isFocused && sugerencias.isNotEmpty() && value.isBlank()) expanded = true
+                    if (focus.isFocused && sugerencias.isNotEmpty()) expanded = true
                 },
             label = { label?.let { Text(it) } },
             placeholder = { Text(placeholder) },
@@ -524,7 +524,7 @@ private fun CampoComentarioConSugerencias(
         value = value,
         sugerencias = sugerencias,
         onValueChange = onValueChange,
-        minLines = 3,
+        minLines = 1,
         maxLines = 5
     )
 }

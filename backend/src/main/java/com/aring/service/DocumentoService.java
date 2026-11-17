@@ -538,13 +538,13 @@ public class DocumentoService {
                 "Del mantenimiento realizado se desprende el listado de los activos intervenidos; el detalle "
                         + "valorizado del servicio y sus condiciones de pago se acompañan como anexo de este informe.");
 
-        tituloSeccion(document, "6. Respaldo fotográfico termografía");
+        tituloSeccion(document, "5. Respaldo fotográfico termografía");
         agregarRespaldoTermografia(document, informes);
 
-        tituloSeccion(document, "7. Resumen de mantenimiento y observaciones.");
+        tituloSeccion(document, "6. Resumen de mantenimiento y observaciones.");
         agregarResumenMantenimiento(document, informes);
 
-        tituloSeccion(document, "8. Agradecimientos.");
+        tituloSeccion(document, "7. Agradecimientos.");
         parrafoCuerpo(document,
                 "Agradeciendo su interés por nuestros productos y/o servicios, quedamos a vuestra disposición, "
                         + "en caso de requerir mayor información, no dude en contactar a nuestra empresa al correo: "
@@ -638,9 +638,9 @@ public class DocumentoService {
                 "3.2 Procedimiento de mantenimiento.",
                 "3.3 Pautas de revisión para tableros",
                 "4. Levantamiento, valorización y condiciones de pago.",
-                "6. Respaldo fotográfico termografía",
-                "7. Resumen de mantenimiento y observaciones.",
-                "8. Agradecimientos."
+                "5. Respaldo fotográfico termografía",
+                "6. Resumen de mantenimiento y observaciones.",
+                "7. Agradecimientos."
         };
         for (String entrada : entradas) {
             XWPFParagraph parrafo = document.createParagraph();
