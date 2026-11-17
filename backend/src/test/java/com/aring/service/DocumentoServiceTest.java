@@ -198,10 +198,9 @@ class DocumentoServiceTest {
         assertTrue(documentXml.contains("3.2 Procedimiento de mantenimiento."));
         assertTrue(documentXml.contains("3.3 Pautas de revisión para tableros (captura de datos tipo Check list)"));
         assertTrue(documentXml.contains("4. Levantamiento, valorización y condiciones de pago."));
-        assertTrue(documentXml.contains("5. Respaldo fotográfico de servicio realizado."));
-        assertTrue(documentXml.contains("6. Respaldo fotográfico termografía"));
-        assertTrue(documentXml.contains("7. Resumen de mantenimiento y observaciones."));
-        assertTrue(documentXml.contains("8. Agradecimientos."));
+        assertTrue(documentXml.contains("5. Respaldo fotográfico termografía"));
+        assertTrue(documentXml.contains("6. Resumen de mantenimiento y observaciones."));
+        assertTrue(documentXml.contains("7. Agradecimientos."));
 
         // Sección 3.3 agrupada por tablero con su información real
         assertTrue(documentXml.contains("Tablero: Tablero principal - Pasillo A - Piso 3"));
