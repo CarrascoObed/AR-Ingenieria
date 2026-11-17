@@ -63,6 +63,12 @@ object Repositorio {
         tecnicos.addAll(tecs)
     }
 
+    suspend fun recargarTecnicos() {
+        val actualizados = tecnicosDesdeJson(ApiService.tecnicos())
+        tecnicos.clear()
+        tecnicos.addAll(actualizados)
+    }
+
     suspend fun cambiarEstadoTarea(id: Int, nuevoEstado: String) {
         reemplazarTarea(tareaDesdeJson(ApiService.cambiarEstadoTarea(id, estadoApiDesdeEtiqueta(nuevoEstado))))
     }

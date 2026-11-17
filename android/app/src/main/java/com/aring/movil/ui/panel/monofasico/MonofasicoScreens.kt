@@ -10,6 +10,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.input.KeyboardType
 import com.aring.movil.camera.OpenCamera
 import com.aring.movil.camera.PhotoBus
+import com.aring.movil.data.panel.esValorNumerico
+import com.aring.movil.data.panel.requiereValorNumerico
 import com.aring.movil.ui.panel.common.ChecklistCard
 import com.aring.movil.ui.panel.common.ChecklistObservationsSection
 import com.aring.movil.ui.panel.common.CollectPhotoResult
@@ -165,17 +167,30 @@ fun MonofasicoVariablesScreen(
                     onValueChange = { vm.setMeasurementValue(measurement.variableId, it) },
                     photoPath = measurement.photoPath,
                     onTakePhoto = {
-                        openCamera(3, PhotoBus.CATEGORY_MEASUREMENT, measurement.variableId, -1, measurement.label)
+                        val incompleta = state.measurements.takeWhile { it.variableId != measurement.variableId }
+                            .firstOrNull { requiereValorNumerico(it.unit) && !esValorNumerico(it.value) }
+                        if (incompleta == null) {
+                            error = null
+                            openCamera(3, PhotoBus.CATEGORY_MEASUREMENT, measurement.variableId, -1, measurement.label)
+                        } else {
+                            error = "Ingrese un valor numérico para ${incompleta.label} antes de tomar la siguiente foto."
+                        }
                     },
                     onViewPhoto = { measurement.photoPath?.let { viewPhotoPath = it } },
                     onRetakePhoto = {
-                        openCamera(3, PhotoBus.CATEGORY_MEASUREMENT, measurement.variableId, -1, measurement.label)
+                        val incompleta = state.measurements.takeWhile { it.variableId != measurement.variableId }
+                            .firstOrNull { requiereValorNumerico(it.unit) && !esValorNumerico(it.value) }
+                        if (incompleta == null) {
+                            error = null
+                            openCamera(3, PhotoBus.CATEGORY_MEASUREMENT, measurement.variableId, -1, measurement.label)
+                        } else {
+                            error = "Ingrese un valor numérico para ${incompleta.label} antes de tomar la siguiente foto."
+                        }
                     },
                     onPhotoEdited = { nuevaRuta ->
                         vm.setMeasurementPhoto(measurement.variableId, nuevaRuta)
                     },
                     onPhotoDeleted = { vm.setMeasurementPhoto(measurement.variableId, null) },
-                    showValueInput = false
                 )
                 Spacing12()
             }
@@ -185,11 +200,27 @@ fun MonofasicoVariablesScreen(
                 subtitle = "Obligatoria",
                 path = state.reaprietePhoto,
                 onTakePhoto = {
-                    openCamera(3, PhotoBus.CATEGORY_REAPRIETE, null, -1, "Reapriete")
+                    val incompleta = state.measurements.firstOrNull {
+                        requiereValorNumerico(it.unit) && !esValorNumerico(it.value)
+                    }
+                    if (incompleta == null) {
+                        error = null
+                        openCamera(3, PhotoBus.CATEGORY_REAPRIETE, null, -1, "Reapriete")
+                    } else {
+                        error = "Ingrese un valor numérico para ${incompleta.label} antes de continuar."
+                    }
                 },
                 onViewPhoto = { state.reaprietePhoto?.let { viewPhotoPath = it } },
                 onRetakePhoto = {
-                    openCamera(3, PhotoBus.CATEGORY_REAPRIETE, null, -1, "Reapriete")
+                    val incompleta = state.measurements.firstOrNull {
+                        requiereValorNumerico(it.unit) && !esValorNumerico(it.value)
+                    }
+                    if (incompleta == null) {
+                        error = null
+                        openCamera(3, PhotoBus.CATEGORY_REAPRIETE, null, -1, "Reapriete")
+                    } else {
+                        error = "Ingrese un valor numérico para ${incompleta.label} antes de continuar."
+                    }
                 },
                 onPhotoEdited = { vm.setReaprietePhoto(it) },
                 onPhotoDeleted = { vm.setReaprietePhoto(null) }
@@ -200,11 +231,27 @@ fun MonofasicoVariablesScreen(
                 subtitle = "Obligatoria",
                 path = state.aseoPhoto,
                 onTakePhoto = {
-                    openCamera(3, PhotoBus.CATEGORY_ASEO, null, -1, "Aseo")
+                    val incompleta = state.measurements.firstOrNull {
+                        requiereValorNumerico(it.unit) && !esValorNumerico(it.value)
+                    }
+                    if (incompleta == null) {
+                        error = null
+                        openCamera(3, PhotoBus.CATEGORY_ASEO, null, -1, "Aseo")
+                    } else {
+                        error = "Ingrese un valor numérico para ${incompleta.label} antes de continuar."
+                    }
                 },
                 onViewPhoto = { state.aseoPhoto?.let { viewPhotoPath = it } },
                 onRetakePhoto = {
-                    openCamera(3, PhotoBus.CATEGORY_ASEO, null, -1, "Aseo")
+                    val incompleta = state.measurements.firstOrNull {
+                        requiereValorNumerico(it.unit) && !esValorNumerico(it.value)
+                    }
+                    if (incompleta == null) {
+                        error = null
+                        openCamera(3, PhotoBus.CATEGORY_ASEO, null, -1, "Aseo")
+                    } else {
+                        error = "Ingrese un valor numérico para ${incompleta.label} antes de continuar."
+                    }
                 },
                 onPhotoEdited = { vm.setAseoPhoto(it) },
                 onPhotoDeleted = { vm.setAseoPhoto(null) }

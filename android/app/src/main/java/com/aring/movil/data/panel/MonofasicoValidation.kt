@@ -33,6 +33,9 @@ object MonofasicoValidation {
             if (m.photoPath == null) {
                 return ValidationResult.fail("Debe tomar la fotografía de ${m.label}")
             }
+            if (requiereValorNumerico(m.unit) && !esValorNumerico(m.value)) {
+                return ValidationResult.fail("Ingrese un valor numérico para ${m.label}")
+            }
         }
         if (state.reaprietePhoto == null) {
             return ValidationResult.fail("Debe tomar la fotografía de Reapriete")

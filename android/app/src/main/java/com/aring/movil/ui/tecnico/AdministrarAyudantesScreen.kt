@@ -17,6 +17,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +60,27 @@ fun AdministrarAyudantesScreen(
     }
     var guardando by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
+    var cargandoTecnicos by remember { mutableStateOf(true) }
+    var errorTecnicos by remember { mutableStateOf("") }
+
+    suspend fun cargarTecnicosActuales() {
+        cargandoTecnicos = true
+        errorTecnicos = ""
+        try {
+            Repositorio.recargarTecnicos()
+            if (Repositorio.tecnicos.none { it.id != tecnico.id }) {
+                errorTecnicos = "No hay otros técnicos disponibles para asignar como ayudantes."
+            }
+        } catch (e: Exception) {
+            errorTecnicos = e.message ?: "No se pudo cargar la lista de técnicos. Revisa la conexión e inténtalo nuevamente."
+        } finally {
+            cargandoTecnicos = false
+        }
+    }
+
+    LaunchedEffect(tarea.id) {
+        cargarTecnicosActuales()
+    }
 
     fun opcionesPara(indice: Int): List<Pair<String, String>> {
         val yaSeleccionados = ayudantes.mapIndexedNotNull { posicion, valor ->
@@ -103,6 +125,20 @@ fun AdministrarAyudantesScreen(
         Spacer(Modifier.height(18.dp))
 
         SeccionFormulario("Ayudantes asignados a la tarea") {
+            if (cargandoTecnicos) {
+                Text("Cargando técnicos del sistema…", color = TextoGris, fontSize = 13.sp)
+                Spacer(Modifier.height(8.dp))
+            } else if (errorTecnicos.isNotBlank()) {
+                BannerError(errorTecnicos)
+                Spacer(Modifier.height(8.dp))
+                BtnSecundario(
+                    texto = "Reintentar cargar técnicos",
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    scope.launch { cargarTecnicosActuales() }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
             ayudantes.forEachIndexed { indice, _ ->
                 Row(
                     Modifier.fillMaxWidth(),

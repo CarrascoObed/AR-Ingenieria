@@ -27,3 +27,9 @@ data class ValidationResult(val valid: Boolean, val message: String? = null) {
         fun fail(message: String): ValidationResult = ValidationResult(valid = false, message = message)
     }
 }
+
+fun requiereValorNumerico(unit: String): Boolean =
+    unit.trim().lowercase() in setOf("amp", "mamp", "v", "volt", "volts")
+
+fun esValorNumerico(value: String): Boolean =
+    value.trim().replace(',', '.').toBigDecimalOrNull() != null
