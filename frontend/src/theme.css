@@ -1147,6 +1147,25 @@ input, select, textarea {
   margin-top: 6px;
 }
 
+.progreso-descarga {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 4px;
+  color: var(--texto-secundario, #626b7a);
+  font-size: 0.92rem;
+}
+
+.progreso-descarga progress {
+  width: min(280px, 45vw);
+  height: 12px;
+  accent-color: var(--violeta, #6535d4);
+}
+
+.progreso-descarga progress:not([value]) {
+  accent-color: var(--violeta, #6535d4);
+}
+
 .campo-busqueda-edificio {
   flex: 1;
   max-width: 560px;

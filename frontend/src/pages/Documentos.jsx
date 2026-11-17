@@ -42,6 +42,21 @@ function nombreDesdeRespuesta(contentDisposition, nombreAlternativo) {
   return simple?.[1]?.trim() || nombreAlternativo;
 }
 
+function IndicadorDescarga({ progreso }) {
+  if (!progreso) return null;
+  const porcentaje = progreso.porcentaje;
+  return (
+    <div className="progreso-descarga" role="status" aria-live="polite">
+      <progress max="100" value={porcentaje ?? undefined} />
+      <span>
+        {porcentaje == null
+          ? (progreso.iniciado ? 'Descargando archivo…' : 'Preparando archivo…')
+          : `Descargando: ${porcentaje}% · queda ${100 - porcentaje}%`}
+      </span>
+    </div>
+  );
+}
+
 export default function Documentos() {
   const [filtroHistorial, setFiltroHistorial] = useState({
     fechaDesde: '',
@@ -60,6 +75,7 @@ export default function Documentos() {
   const [busquedaRealizada, setBusquedaRealizada] = useState(false);
   const [error, setError] = useState('');
   const [descargando, setDescargando] = useState('');
+  const [progresoDescarga, setProgresoDescarga] = useState(null);
 
   useEffect(() => {
     const consulta = busquedaEdificio.trim();
@@ -144,8 +160,18 @@ export default function Documentos() {
   const descargar = async (ruta, nombreArchivo, params = {}) => {
     setError('');
     setDescargando(ruta);
+    setProgresoDescarga({ ruta, porcentaje: null });
     try {
-      const res = await api.get(ruta, { params, responseType: 'blob' });
+      const res = await api.get(ruta, {
+        params,
+        responseType: 'blob',
+        onDownloadProgress: (evento) => {
+          setProgresoDescarga({ ruta, porcentaje: null, iniciado: true });
+          if (evento.total) {
+            setProgresoDescarga({ ruta, porcentaje: Math.min(100, Math.round((evento.loaded / evento.total) * 100)) });
+          }
+        },
+      });
       const blobUrl = URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = blobUrl;
@@ -158,6 +184,7 @@ export default function Documentos() {
       setError(await mensajeErrorBlob(err));
     } finally {
       setDescargando('');
+      setProgresoDescarga(null);
     }
   };
 
@@ -222,6 +249,7 @@ export default function Documentos() {
             {descargando === '/documentos/historial.xlsx' ? 'Descargando…' : 'Descargar Excel'}
           </button>
         </div>
+        {progresoDescarga?.ruta === '/documentos/historial.xlsx' && <IndicadorDescarga progreso={progresoDescarga} />}
       </section>
 
       <section className="tarjeta-documento">
@@ -383,6 +411,7 @@ export default function Documentos() {
             {descargando === '/documentos/finalizada.zip' ? 'Preparando documentos…' : 'Descargar ambos (ZIP)'}
           </button>
         </div>
+        {progresoDescarga?.ruta === '/documentos/finalizada.zip' && <IndicadorDescarga progreso={progresoDescarga} />}
       </section>
     </div>
   );

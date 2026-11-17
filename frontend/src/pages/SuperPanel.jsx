@@ -24,6 +24,21 @@ const PANTALLAS = [
   { nombre: 'DOCUMENTOS', etiqueta: 'Documentos' },
 ];
 
+function IndicadorDescarga({ progreso }) {
+  if (!progreso) return null;
+  const porcentaje = progreso.porcentaje;
+  return (
+    <div className="progreso-descarga" role="status" aria-live="polite">
+      <progress max="100" value={porcentaje ?? undefined} />
+      <span>
+        {porcentaje == null
+          ? (progreso.iniciado ? 'Descargando archivo…' : 'Preparando archivo…')
+          : `Descargando: ${porcentaje}% · queda ${100 - porcentaje}%`}
+      </span>
+    </div>
+  );
+}
+
 function Interruptor({ activo, disabled, onChange }) {
   return (
     <button
@@ -49,6 +64,7 @@ function SeccionInformes() {
   const [cargandoTareas, setCargandoTareas] = useState(false);
   const [error, setError] = useState('');
   const [descargando, setDescargando] = useState('');
+  const [progresoDescarga, setProgresoDescarga] = useState(null);
 
   useEffect(() => {
     const consulta = busquedaEdificio.trim();
@@ -103,10 +119,17 @@ function SeccionInformes() {
     if (!tareaSeleccionada) return;
     setError('');
     setDescargando(ruta);
+    setProgresoDescarga({ ruta, porcentaje: null });
     try {
       const res = await api.get(ruta, {
         params: { idTarea: tareaSeleccionada.codigo },
         responseType: 'blob',
+        onDownloadProgress: (evento) => {
+          setProgresoDescarga({ ruta, porcentaje: null, iniciado: true });
+          if (evento.total) {
+            setProgresoDescarga({ ruta, porcentaje: Math.min(100, Math.round((evento.loaded / evento.total) * 100)) });
+          }
+        },
       });
       const blobUrl = URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
@@ -131,6 +154,7 @@ function SeccionInformes() {
       setError(await mensajeErrorBlob(err));
     } finally {
       setDescargando('');
+      setProgresoDescarga(null);
     }
   };
 
@@ -267,6 +291,7 @@ function SeccionInformes() {
           {descargando === '/documentos/finalizada.zip' ? 'Preparando documentos…' : 'Descargar ambos (ZIP)'}
         </button>
       </div>
+      {progresoDescarga && <IndicadorDescarga progreso={progresoDescarga} />}
     </section>
   );
 }
@@ -282,6 +307,7 @@ function SeccionTareas() {
   const [anioDescarga, setAnioDescarga] = useState(String(new Date().getFullYear()));
   const [mesDescarga, setMesDescarga] = useState('');
   const [descargandoDocumentos, setDescargandoDocumentos] = useState(false);
+  const [progresoDocumentos, setProgresoDocumentos] = useState(null);
 
   const fechaPeriodo = (tarea) => tarea.fechaFin || tarea.fechaInicio || tarea.fechaCreacion;
   const anioDeFecha = (fecha) => Number(new Intl.DateTimeFormat('en', {
@@ -322,12 +348,19 @@ function SeccionTareas() {
     setError('');
     setOk('');
     setDescargandoDocumentos(true);
+    setProgresoDocumentos({ porcentaje: null });
     try {
       const params = { anio: Number(anioDescarga) };
       if (mesDescarga) params.mes = Number(mesDescarga);
       const res = await api.get('/super/documentos-finalizadas.zip', {
         params,
         responseType: 'blob',
+        onDownloadProgress: (evento) => {
+          setProgresoDocumentos({ porcentaje: null, iniciado: true });
+          if (evento.total) {
+            setProgresoDocumentos({ porcentaje: Math.min(100, Math.round((evento.loaded / evento.total) * 100)) });
+          }
+        },
       });
       const blobUrl = URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
@@ -342,6 +375,7 @@ function SeccionTareas() {
       setError(await mensajeErrorBlob(e));
     } finally {
       setDescargandoDocumentos(false);
+      setProgresoDocumentos(null);
     }
   };
 
@@ -436,6 +470,7 @@ function SeccionTareas() {
             {descargandoDocumentos ? 'Preparando documentos…' : 'Descargar documentos (ZIP)'}
           </button>
         </div>
+        {progresoDocumentos && <IndicadorDescarga progreso={progresoDocumentos} />}
       </div>
 
       <div className="fila-descarga">

@@ -3,12 +3,14 @@ package com.aring.movil.data.panel
 import com.aring.movil.data.ApiService
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.Instant
 
 object TableroRepository {
 
     fun buildTrifasico(tareaId: Int, tecnicoId: Int, st: TrifasicoState): JSONObject {
         val root = base(tareaId, tecnicoId, TYPE_TRIFASICO, st.registration.descripcion, st.registration.ubicacion, st.registration.nivel)
         root.put("clientOperationId", st.inspectionId)
+        root.put("fechaRealizacion", Instant.now().toString())
         root.put("tamanioTablero", st.registration.tamanioTablero)
         root.put("mediciones", medicionesTrifasicas(st.measurements))
         root.put("checklist", checklistTrifasico(st.checklist))
@@ -20,6 +22,7 @@ object TableroRepository {
     fun buildMonofasico(tareaId: Int, tecnicoId: Int, st: MonofasicoState): JSONObject {
         val root = base(tareaId, tecnicoId, TYPE_MONOFASICO, st.registration.descripcion, st.registration.ubicacion, st.registration.nivel)
         root.put("clientOperationId", st.inspectionId)
+        root.put("fechaRealizacion", Instant.now().toString())
         root.put("mediciones", medicionesMonofasicas(st.measurements))
         root.put("checklist", checklistMonofasico(st.checklist))
         root.put("imagenes", imagenes(st.previousPhotos, st.reaprietePhoto, st.aseoPhoto))

@@ -81,7 +81,9 @@ public class TableroService {
         informe.setReapriete(request.getReapriete());
         informe.setAseo(request.getAseo());
         informe.setTamanio(request.getTamanioTablero());
-        informe.setFechaCreacion(Instant.now());
+        informe.setFechaCreacion(request.getFechaRealizacion() != null
+                ? request.getFechaRealizacion()
+                : Instant.now());
 
         Long tecnicoId = tecnicoIdToken != null ? tecnicoIdToken : request.getTecnicoId();
         if (tecnicoId != null) {

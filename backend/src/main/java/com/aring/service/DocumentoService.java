@@ -29,6 +29,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xwpf.usermodel.BreakType;
 import org.apache.poi.xwpf.usermodel.Document;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.TableRowHeightRule;
@@ -106,19 +107,6 @@ public class DocumentoService {
     private static final Set<String> VARIABLES_TERMOGRAFIA = Set.of(
             "mono_termografia", "tri_termografia", "tri_temp");
     private static final Set<String> ITEMS_TERMOGRAFIA = Set.of("mono_c9", "tri_c21");
-    private static final List<String> ENTRADAS_INDICE = List.of(
-            "Declaración de Confidencialidad",
-            "1. Introducción.",
-            "2. Objetivos del Mantenimiento.",
-            "3. Procedimiento general del mantenimiento.",
-            "3.1 Instrumentación para el servicio",
-            "3.2 Procedimiento de mantenimiento.",
-            "3.3 Pautas de revisión para tableros",
-            "4. Levantamiento, valorización y condiciones de pago.",
-            "6. Respaldo fotográfico termografía",
-            "7. Resumen de mantenimiento y observaciones.",
-            "8. Agradecimientos.");
-
     private static final long ANCHO_PORTADA_EMU = cmToEmu(15.59);
     private static final long ALTO_PORTADA_EMU = cmToEmu(12.44);
 
@@ -222,7 +210,7 @@ public class DocumentoService {
             Sheet sheet = workbook.createSheet("Rendición de servicios");
             sheet.setDisplayGridlines(false);
 
-            int[] anchos = {7, 20, 33, 18, 16, 50, 22, 22, 36};
+            int[] anchos = {7, 20, 33, 18, 16, 50, 22, 22};
             for (int i = 0; i < anchos.length; i++) {
                 sheet.setColumnWidth(i + 1, anchos[i] * 256);
             }
@@ -251,18 +239,18 @@ public class DocumentoService {
                 }
                 primerBloque = false;
 
-                // Título B3:J3
+                // Título B3:I3
                 Row filaTitulo = sheet.createRow(fila++);
                 filaTitulo.setHeightInPoints(28);
-                for (int c = 1; c <= 9; c++) {
+                for (int c = 1; c <= 8; c++) {
                     filaTitulo.createCell(c).setCellStyle(estiloTitulo);
                 }
                 filaTitulo.getCell(1).setCellValue("Rendicion de servicios");
-                sheet.addMergedRegion(new CellRangeAddress(fila - 1, fila - 1, 1, 9));
+                sheet.addMergedRegion(new CellRangeAddress(fila - 1, fila - 1, 1, 8));
 
-                // Cabecera B4:J4
+                // Cabecera B4:I4
                 String[] cabeceras = {"Piso", "Ubicación", "Descripcion", "Tipo de tablero", "Tamaño tablero", "Observaciones",
-                        "Nivel de criticidad", "Valor reparación", "Ayudantes de la tarea"};
+                        "Nivel de criticidad", "Valor reparación"};
                 Row filaCabecera = sheet.createRow(fila++);
                 filaCabecera.setHeightInPoints(22);
                 for (int i = 0; i < cabeceras.length; i++) {
@@ -286,7 +274,6 @@ public class DocumentoService {
                         escribirCelda(row, 6, obs.getTexto().trim(), alternar ? datoTextoAlt : datoTexto);
                         escribirCelda(row, 7, "", alternar ? datoCentradoAlt : datoCentrado);
                         escribirCelda(row, 8, "", alternar ? datoMonedaAlt : datoMoneda);
-                        escribirCelda(row, 9, ayudantesTarea(tarea), alternar ? datoTextoAlt : datoTexto);
                         alternar = !alternar;
                     }
                 }
@@ -297,7 +284,7 @@ public class DocumentoService {
                 escribirCelda(row, 1,
                         "No hay tableros con comentarios escritos para los filtros seleccionados.",
                         datoTexto);
-                sheet.addMergedRegion(new CellRangeAddress(fila, fila, 1, 9));
+                sheet.addMergedRegion(new CellRangeAddress(fila, fila, 1, 8));
             }
 
             workbook.write(out);
@@ -519,7 +506,7 @@ public class DocumentoService {
                 if (informes.isEmpty()) {
                     continue;
                 }
-                agregarInformeTarea(document, tarea, informes, "tarea_" + tarea.getId() + "_");
+                agregarInformeTarea(document, tarea, informes);
                 hayInformes = true;
             }
 
@@ -542,29 +529,31 @@ public class DocumentoService {
         }
     }
 
-    private void agregarInformeTarea(XWPFDocument document, Tarea tarea, List<InformeTablero> informes,
-                                     String prefijoMarcador) {
+    private void agregarInformeTarea(XWPFDocument document, Tarea tarea, List<InformeTablero> informes) {
         agregarPortada(document, tarea);
-        agregarIndice(document, prefijoMarcador);
-        agregarContenidoGeneral(document, tarea, prefijoMarcador);
+        saltoPagina(document);
+        agregarIndice(document);
+        saltoPagina(document);
+        agregarContenidoGeneral(document, tarea);
 
-        tituloSeccion(document, "3.3 Pautas de revisión para tableros", prefijoMarcador + "seccion_6");
+        saltoPagina(document);
+        tituloSeccion(document, "3.3 Pautas de revisión para tableros");
         for (int indice = 0; indice < informes.size(); indice++) {
             agregarSeccionTablero(document, tarea, informes.get(indice), indice + 1);
         }
 
-        tituloSeccion(document, "4. Levantamiento, valorización y condiciones de pago.", prefijoMarcador + "seccion_7");
+        tituloSeccion(document, "4. Levantamiento, valorización y condiciones de pago.");
         parrafoCuerpo(document,
                 "Del mantenimiento realizado se desprende el listado de los activos intervenidos; el detalle "
                         + "valorizado del servicio y sus condiciones de pago se acompañan como anexo de este informe.");
 
-        tituloSeccion(document, "6. Respaldo fotográfico termografía", prefijoMarcador + "seccion_8");
+        tituloSeccion(document, "6. Respaldo fotográfico termografía");
         agregarRespaldoTermografia(document, informes);
 
-        tituloSeccion(document, "7. Resumen de mantenimiento y observaciones.", prefijoMarcador + "seccion_9");
+        tituloSeccion(document, "7. Resumen de mantenimiento y observaciones.");
         agregarResumenMantenimiento(document, informes);
 
-        tituloSeccion(document, "8. Agradecimientos.", prefijoMarcador + "seccion_10");
+        tituloSeccion(document, "8. Agradecimientos.");
         parrafoCuerpo(document,
                 "Agradeciendo su interés por nuestros productos y/o servicios, quedamos a vuestra disposición, "
                         + "en caso de requerir mayor información, no dude en contactar a nuestra empresa al correo: "
@@ -638,7 +627,7 @@ public class DocumentoService {
         run.setColor("1B6DC1");
     }
 
-    private void agregarIndice(XWPFDocument document, String prefijoMarcador) {
+    private void agregarIndice(XWPFDocument document) {
         XWPFParagraph titulo = document.createParagraph();
         titulo.setSpacingBefore(120);
         titulo.setSpacingAfter(200);
@@ -649,85 +638,57 @@ public class DocumentoService {
         run.setFontSize(14);
         run.setColor("1B6DC1");
 
-        XWPFTable indice = document.createTable(ENTRADAS_INDICE.size(), 2);
-        indice.setWidth("100%");
-        CTTblPr propiedades = indice.getCTTbl().getTblPr();
-        CTTblBorders bordes = propiedades.addNewTblBorders();
-        for (CTBorder borde : List.of(
-                bordes.addNewTop(), bordes.addNewLeft(), bordes.addNewBottom(), bordes.addNewRight(),
-                bordes.addNewInsideH(), bordes.addNewInsideV())) {
-            borde.setVal(STBorder.NIL);
-        }
-        for (int i = 0; i < ENTRADAS_INDICE.size(); i++) {
-            XWPFTableRow fila = indice.getRow(i);
-            XWPFTableCell celdaTitulo = fila.getCell(0);
-            XWPFTableCell celdaPagina = fila.getCell(1);
-            celdaTitulo.setWidth("8500");
-            celdaPagina.setWidth("600");
-            XWPFParagraph parrafoTitulo = celdaTitulo.getParagraphs().get(0);
-            parrafoTitulo.setSpacingAfter(70);
-            XWPFRun runEntrada = parrafoTitulo.createRun();
-            runEntrada.setText(ENTRADAS_INDICE.get(i));
-            runEntrada.setFontFamily("Arial");
-            runEntrada.setFontSize(10);
-
-            XWPFParagraph parrafoPagina = celdaPagina.getParagraphs().get(0);
-            parrafoPagina.setAlignment(ParagraphAlignment.RIGHT);
-            parrafoPagina.setSpacingAfter(70);
-            agregarCampoPagina(parrafoPagina, prefijoMarcador + "seccion_" + i);
-        }
-    }
-
-    private void agregarCampoPagina(XWPFParagraph parrafo, String marcador) {
-        XWPFRun inicio = parrafo.createRun();
+        XWPFParagraph campoIndice = document.createParagraph();
+        campoIndice.setSpacingAfter(100);
+        XWPFRun inicio = campoIndice.createRun();
         inicio.getCTR().addNewFldChar().setFldCharType(STFldCharType.BEGIN);
-        XWPFRun instruccion = parrafo.createRun();
-        instruccion.getCTR().addNewInstrText().setStringValue("PAGEREF " + marcador + " \\h");
-        XWPFRun separador = parrafo.createRun();
+        XWPFRun instruccion = campoIndice.createRun();
+        instruccion.getCTR().addNewInstrText().setStringValue("TOC \\h \\z \\u");
+        XWPFRun separador = campoIndice.createRun();
         separador.getCTR().addNewFldChar().setFldCharType(STFldCharType.SEPARATE);
-        XWPFRun valor = parrafo.createRun();
-        valor.setText("1");
-        valor.setFontFamily("Arial");
-        valor.setFontSize(10);
-        XWPFRun fin = parrafo.createRun();
+        XWPFRun mensaje = campoIndice.createRun();
+        mensaje.setText("Actualice el índice en Word si no aparecen las páginas.");
+        mensaje.setFontFamily("Arial");
+        mensaje.setFontSize(10);
+        XWPFRun fin = campoIndice.createRun();
         fin.getCTR().addNewFldChar().setFldCharType(STFldCharType.END);
     }
 
-    private void agregarContenidoGeneral(XWPFDocument document, Tarea tarea, String prefijoMarcador) {
+    private void agregarContenidoGeneral(XWPFDocument document, Tarea tarea) {
         Cliente cliente = tarea.getCliente();
         String recinto = cliente != null && !texto(cliente.getNombreRecinto()).isBlank()
                 ? texto(cliente.getNombreRecinto())
                 : texto(tarea.getNombreRecinto());
 
-        tituloSeccion(document, "Declaración de Confidencialidad", prefijoMarcador + "seccion_0");
+        tituloSeccion(document, "Declaración de Confidencialidad");
         parrafoCuerpo(document,
                 "La presente documentación y material de soporte contiene información confidencial. "
                         + "Este material puede ser impreso o fotocopiado para uso en la evaluación del servicio realizado por "
                         + "AR ingeniería eléctrica spa, pero no compartido con terceros.");
 
-        tituloSeccion(document, "1. Introducción.", prefijoMarcador + "seccion_1");
+        tituloSeccion(document, "1. Introducción.");
         parrafoCuerpo(document,
                 "El presente informe tiene el objetivo de concentrar los resultados obtenidos del trabajo de mantenimiento "
                         + "preventivo, realizado por la empresa AR Ingeniería SpA a los tableros de espacio común de "
                         + (recinto.isBlank() ? "la propiedad" : recinto)
                         + "; individualizados en el punto 3.3 de este informe.");
 
-        tituloSeccion(document, "2. Objetivos del Mantenimiento.", prefijoMarcador + "seccion_2");
+        tituloSeccion(document, "2. Objetivos del Mantenimiento.");
         parrafoCuerpo(document,
                 "El mantenimiento tiene por propósito extender la vida útil de los activos eléctricos del edificio. "
                         + "También debe ser capaz de generar ahorros a largo plazo, principalmente derivados de la alta "
                         + "continuidad operacional de los recintos, control de fallas y bajo costo de reparaciones "
                         + "(gestionados a través de los mantenimientos preventivos).");
 
-        tituloSeccion(document, "3. Procedimiento general del mantenimiento.", prefijoMarcador + "seccion_3");
-        tituloSubseccion(document, "3.1 Instrumentación para el servicio", prefijoMarcador + "seccion_4");
+        tituloSeccion(document, "3. Procedimiento general del mantenimiento.");
+        tituloSubseccion(document, "3.1 Instrumentación para el servicio");
         parrafoCuerpo(document,
                 "Para el desarrollo de las actividades de mantenimiento, es necesario la aplicación de instrumentos "
                         + "especializados tales como cámara termográfica, analizador de redes, probador de aislación e "
                         + "instrumentación de puesta en servicio de nuevas instalaciones; elementos que AR Ingeniería SpA. "
                         + "ha adquirido de las empresas que cuentan con mayor renombre en el rubro (Uni-t, Fluke y Hioki).");
         agregarInstrumentos(document);
-        tituloSubseccion(document, "3.2 Procedimiento de mantenimiento.", prefijoMarcador + "seccion_5");
+        tituloSubseccion(document, "3.2 Procedimiento de mantenimiento.");
         parrafoCuerpo(document,
                 "El procedimiento de mantenimiento preventivo, aplicado a los tableros eléctricos, se subdivide en tres "
                         + "áreas de ejecución. Cada una de las áreas, se centra en pautas de chequeo que aseguran la revisión "
@@ -764,19 +725,29 @@ public class DocumentoService {
 
     private void agregarSeccionTablero(XWPFDocument document, Tarea tarea, InformeTablero informe, int numeroTablero) {
         String nombre = texto(informe.getDescripcion()).isBlank() ? "Sin nombre" : texto(informe.getDescripcion());
-        tituloSubseccion(document, "Tablero " + numeroTablero + " · " + nombre);
+        if (numeroTablero > 1) {
+            saltoPagina(document);
+        }
+        tituloAuxiliar(document, "Tablero " + numeroTablero + " · " + nombre);
 
         agregarTablaDatos(document, new String[][] {
                 {"Ubicación", texto(informe.getUbicacion()).isBlank() ? "No registrada" : texto(informe.getUbicacion())},
                 {"Nivel", texto(informe.getNivel()).isBlank() ? "No registrado" : texto(informe.getNivel())},
                 {"Tipo de tablero", informe.getTipoTablero() == null ? "No registrado" : informe.getTipoTablero().getEtiqueta()},
+                {"Fecha y hora", informe.getFechaCreacion() == null ? "No registrada" : FORMATO_FECHA.format(informe.getFechaCreacion())},
                 {"Responsable del registro", responsableMantenimiento(informe, tarea)},
                 {"Equipo técnico de la tarea", equipoTecnicoTarea(tarea)},
         });
 
         agregarTablaChecklist(document, informe);
 
-        tituloSubseccion(document, "Observaciones generales");
+        boolean tieneFotos = !fotosNoTermograficas(informe).isEmpty();
+        boolean tieneObservaciones = informe.getObservaciones() != null && !informe.getObservaciones().isEmpty();
+        if (tieneFotos || tieneObservaciones) {
+            saltoPagina(document);
+        }
+
+        tituloAuxiliar(document, "Observaciones generales");
         List<ObservacionTablero> observaciones = new ArrayList<>(informe.getObservaciones());
         observaciones.sort(Comparator.comparingInt(ObservacionTablero::getOrden));
         if (observaciones.isEmpty()) {
@@ -788,11 +759,16 @@ public class DocumentoService {
         }
 
         List<FotoInforme> fotosTablero = fotosNoTermograficas(informe);
+        fotosTablero.addAll(fotosTermografia(informe));
         if (!fotosTablero.isEmpty()) {
-            agregarLineasEnBlanco(document, 3);
+            tituloAuxiliar(document, "Evidencias fotográficas");
             agregarGaleria(document, fotosTablero, 6, 2.8, 4.98);
-            agregarLineasEnBlanco(document, 3);
         }
+    }
+
+    private void saltoPagina(XWPFDocument document) {
+        XWPFParagraph salto = document.createParagraph();
+        salto.createRun().addBreak(BreakType.PAGE);
     }
 
     private void agregarTablaChecklist(XWPFDocument document, InformeTablero informe) {
@@ -821,8 +797,8 @@ public class DocumentoService {
         tblPr.addNewTblLayout().setType(STTblLayoutType.FIXED);
 
         CTTblCellMar cellMar = tblPr.addNewTblCellMar();
-        cellMar.addNewTop().setW(BigInteger.valueOf(55));
-        cellMar.addNewBottom().setW(BigInteger.valueOf(55));
+        cellMar.addNewTop().setW(BigInteger.valueOf(20));
+        cellMar.addNewBottom().setW(BigInteger.valueOf(20));
         cellMar.addNewLeft().setW(BigInteger.valueOf(110));
         cellMar.addNewRight().setW(BigInteger.valueOf(110));
 
@@ -838,8 +814,8 @@ public class DocumentoService {
         XWPFTableRow cabecera = tabla.getRow(0);
         var propiedadesCabecera = cabecera.getCtRow().addNewTrPr();
         propiedadesCabecera.addNewCantSplit();
-        configurarCeldaChecklist(cabecera.getCell(0), "Punto revisado", "4B2495", "FFFFFF", true, false, "6500");
-        configurarCeldaChecklist(cabecera.getCell(1), "Resultado", "4B2495", "FFFFFF", true, true, "2545");
+        configurarCeldaChecklist(cabecera.getCell(0), "Punto revisado", "4B2495", "FFFFFF", true, false, "7600");
+        configurarCeldaChecklist(cabecera.getCell(1), "Resultado", "4B2495", "FFFFFF", true, true, "1445");
 
         for (int i = 0; i < checklist.size(); i++) {
             ChecklistTablero item = checklist.get(i);
@@ -848,7 +824,7 @@ public class DocumentoService {
 
             XWPFTableCell celdaItem = fila.getCell(0);
             configurarCeldaChecklist(celdaItem, texto(item.getLabel()), i % 2 == 0 ? "FFFFFF" : "F7F6FC",
-                    "333333", false, false, "6500");
+                    "333333", false, false, "7600");
 
             String estado = estadoChecklist(item.getStatus());
             String fondoEstado = switch (estado) {
@@ -864,7 +840,7 @@ public class DocumentoService {
                 default -> "333333";
             };
             configurarCeldaChecklist(fila.getCell(1), estado, fondoEstado, colorEstado,
-                    true, true, "2545");
+                    true, true, "1445");
         }
     }
 
@@ -882,7 +858,7 @@ public class DocumentoService {
         XWPFRun run = parrafo.createRun();
         run.setText(valor == null || valor.isBlank() ? "—" : valor);
         run.setFontFamily("Arial");
-        run.setFontSize(9);
+        run.setFontSize(8);
         run.setBold(negrita);
         run.setColor(colorTexto);
     }
@@ -1090,13 +1066,6 @@ public class DocumentoService {
         return tecnico.getNombre() + " " + tecnico.getApellido();
     }
 
-    private String ayudantesTarea(Tarea tarea) {
-        List<String> ayudantes = tarea.getTecnicosInvitados().stream()
-                .map(tecnico -> tecnico.getNombre() + " " + tecnico.getApellido())
-                .toList();
-        return ayudantes.isEmpty() ? "Sin ayudantes registrados" : String.join(", ", ayudantes);
-    }
-
     private List<FotoInforme> fotosNoTermograficas(InformeTablero informe) {
         List<FotoInforme> fotos = new ArrayList<>();
         List<ImagenTablero> imagenes = new ArrayList<>(informe.getImagenes());
@@ -1165,44 +1134,29 @@ public class DocumentoService {
     }
 
     private void agregarRespaldoTermografia(XWPFDocument document, List<InformeTablero> informes) {
-        List<FotoInforme> fotosTermografia = new ArrayList<>();
-        for (InformeTablero informe : informes) {
-            List<FotoInforme> fotos = new ArrayList<>();
-            List<MedicionTablero> mediciones = new ArrayList<>(informe.getMediciones());
-            mediciones.sort(Comparator.comparingLong(m -> m.getId() == null ? 0L : m.getId()));
-            for (MedicionTablero medicion : mediciones) {
-                if (!esMedicionTermografica(medicion)) {
-                    continue;
-                }
+        parrafoCuerpo(document,
+                "Las evidencias termográficas se presentan junto con las demás fotografías de cada tablero en la sección 3.3.");
+    }
+
+    private List<FotoInforme> fotosTermografia(InformeTablero informe) {
+        List<FotoInforme> fotos = new ArrayList<>();
+        List<MedicionTablero> mediciones = new ArrayList<>(informe.getMediciones());
+        mediciones.sort(Comparator.comparingLong(m -> m.getId() == null ? 0L : m.getId()));
+        for (MedicionTablero medicion : mediciones) {
+            if (esMedicionTermografica(medicion)) {
                 byte[] bytes = decodificar(medicion.getFotoBase64());
-                if (bytes == null) {
-                    continue;
-                }
-                fotos.add(new FotoInforme(bytes, null));
+                if (bytes != null) fotos.add(new FotoInforme(bytes, null));
             }
-            List<ChecklistTablero> checklist = new ArrayList<>(informe.getChecklist());
-            checklist.sort(Comparator.comparingLong(c -> c.getId() == null ? 0L : c.getId()));
-            for (ChecklistTablero item : checklist) {
-                if (!esChecklistTermografico(item)) {
-                    continue;
-                }
+        }
+        List<ChecklistTablero> checklist = new ArrayList<>(informe.getChecklist());
+        checklist.sort(Comparator.comparingLong(c -> c.getId() == null ? 0L : c.getId()));
+        for (ChecklistTablero item : checklist) {
+            if (esChecklistTermografico(item)) {
                 byte[] bytes = decodificar(item.getFotoBase64());
-                if (bytes == null) {
-                    continue;
-                }
-                fotos.add(new FotoInforme(bytes, null));
-            }
-            if (!fotos.isEmpty()) {
-                fotosTermografia.addAll(fotos);
+                if (bytes != null) fotos.add(new FotoInforme(bytes, null));
             }
         }
-        if (fotosTermografia.isEmpty()) {
-            parrafoCuerpo(document,
-                    "No se registraron fotografías termográficas para los tableros de este mantenimiento.");
-        } else {
-            tituloSubseccion(document, "Registros termográficos del mantenimiento");
-            agregarGaleria(document, fotosTermografia, 6, 2.8, 4.98);
-        }
+        return fotos;
     }
 
     private boolean esMedicionTermografica(MedicionTablero medicion) {
@@ -1419,67 +1373,49 @@ public class DocumentoService {
     // ------------------------------------------------------------------
 
     private void tituloSeccion(XWPFDocument document, String texto) {
-        tituloSeccion(document, texto, null);
-    }
-
-    private void tituloSeccion(XWPFDocument document, String texto, String marcador) {
         XWPFParagraph parrafo = document.createParagraph();
+        establecerNivelEsquema(parrafo, 0);
         parrafo.setSpacingBefore(240);
         parrafo.setSpacingAfter(80);
-        BigInteger bookmarkId = agregarInicioMarcadorIndice(parrafo, marcador);
         XWPFRun run = parrafo.createRun();
         run.setText(texto);
         run.setBold(false);
         run.setFontFamily("Arial");
         run.setFontSize(14);
         run.setColor("1B6DC1");
-        agregarFinMarcadorIndice(parrafo, bookmarkId);
     }
 
     private void tituloSubseccion(XWPFDocument document, String texto) {
-        tituloSubseccion(document, texto, null);
-    }
-
-    private void tituloSubseccion(XWPFDocument document, String texto, String marcador) {
         XWPFParagraph parrafo = document.createParagraph();
+        establecerNivelEsquema(parrafo, 1);
         parrafo.setSpacingBefore(160);
         parrafo.setSpacingAfter(60);
-        BigInteger bookmarkId = agregarInicioMarcadorIndice(parrafo, marcador);
         XWPFRun run = parrafo.createRun();
         run.setText(texto);
         run.setBold(false);
         run.setFontFamily("Arial");
         run.setFontSize(13);
         run.setColor("1B6DC1");
-        agregarFinMarcadorIndice(parrafo, bookmarkId);
     }
 
-    private BigInteger agregarInicioMarcadorIndice(XWPFParagraph parrafo, String marcador) {
-        if (marcador == null || marcador.isBlank()) {
-            return null;
-        }
-        int separador = marcador.indexOf("_seccion_");
-        if (!marcador.startsWith("tarea_") || separador < 0) {
-            return null;
-        }
-        BigInteger id;
-        try {
-            BigInteger tareaId = new BigInteger(marcador.substring("tarea_".length(), separador));
-            BigInteger indiceSeccion = new BigInteger(marcador.substring(separador + "_seccion_".length()));
-            id = tareaId.multiply(BigInteger.valueOf(100)).add(indiceSeccion).add(BigInteger.ONE);
-        } catch (NumberFormatException ignored) {
-            return null;
-        }
-        var inicio = parrafo.getCTP().addNewBookmarkStart();
-        inicio.setId(id);
-        inicio.setName(marcador);
-        return id;
+    private void tituloAuxiliar(XWPFDocument document, String texto) {
+        XWPFParagraph parrafo = document.createParagraph();
+        parrafo.setSpacingBefore(160);
+        parrafo.setSpacingAfter(60);
+        parrafo.setKeepNext(true);
+        XWPFRun run = parrafo.createRun();
+        run.setText(texto);
+        run.setBold(true);
+        run.setFontFamily("Arial");
+        run.setFontSize(11);
+        run.setColor("4B2495");
     }
 
-    private void agregarFinMarcadorIndice(XWPFParagraph parrafo, BigInteger id) {
-        if (id != null) {
-            parrafo.getCTP().addNewBookmarkEnd().setId(id);
-        }
+    private void establecerNivelEsquema(XWPFParagraph parrafo, int nivel) {
+        var propiedades = parrafo.getCTP().isSetPPr()
+                ? parrafo.getCTP().getPPr()
+                : parrafo.getCTP().addNewPPr();
+        propiedades.addNewOutlineLvl().setVal(BigInteger.valueOf(nivel));
     }
 
     private void parrafoCuerpo(XWPFDocument document, String texto) {

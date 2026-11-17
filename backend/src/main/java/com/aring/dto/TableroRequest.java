@@ -7,6 +7,7 @@ import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -36,6 +37,8 @@ public class TableroRequest {
     private Long tecnicoId;
 
     private String clientOperationId;
+
+    private Instant fechaRealizacion;
 
     private List<MedicionRequest> mediciones = new ArrayList<>();
 
