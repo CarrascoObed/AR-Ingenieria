@@ -83,6 +83,14 @@ def main():
         if document is None:
             raise RuntimeError("LibreOffice no pudo abrir el informe generado.")
 
+        paragraph_styles = document.getStyleFamilies().getByName("ParagraphStyles")
+        for style_name in paragraph_styles.getElementNames():
+            if style_name == "Contents Heading" or style_name.startswith("Contents "):
+                style = paragraph_styles.getByName(style_name)
+                style.CharFontName = "Arial"
+                if style_name.startswith("Contents "):
+                    style.CharHeight = 12.0
+
         indexes = document.getDocumentIndexes()
         if indexes.getCount() == 0:
             raise RuntimeError("El informe no contiene un índice que pueda actualizarse.")

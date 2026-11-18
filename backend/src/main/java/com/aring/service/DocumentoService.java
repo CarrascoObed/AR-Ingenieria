@@ -78,6 +78,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -98,9 +99,8 @@ public class DocumentoService {
             .ofPattern("dd/MM/yyyy HH:mm")
             .withZone(ZoneId.of("America/Santiago"));
 
-    private static final DateTimeFormatter FORMATO_MES_ANO = DateTimeFormatter
-            .ofPattern("MMMM 'del' yyyy", new Locale("es", "CL"))
-            .withZone(ZoneId.of("America/Santiago"));
+    private static final DateTimeFormatter FORMATO_MES = DateTimeFormatter
+            .ofPattern("MMMM", new Locale("es", "CL"));
 
     private static final DateTimeFormatter FORMATO_ARCHIVO_MES_ANO = DateTimeFormatter
             .ofPattern("MMMM-yyyy", new Locale("es", "CL"))
@@ -582,7 +582,7 @@ public class DocumentoService {
     }
 
     private void agregarInformeTarea(XWPFDocument document, Tarea tarea, List<InformeTablero> informes) {
-        agregarPortada(document, tarea);
+        agregarPortada(document, tarea, informes);
         saltoPagina(document);
         agregarIndice(document);
         saltoPagina(document);
@@ -621,7 +621,7 @@ public class DocumentoService {
     private record FotoInforme(byte[] bytes, String pie) {
     }
 
-    private void agregarPortada(XWPFDocument document, Tarea tarea) {
+    private void agregarPortada(XWPFDocument document, Tarea tarea, List<InformeTablero> informes) {
         Cliente cliente = tarea.getCliente();
         String recinto = cliente != null && !texto(cliente.getNombreRecinto()).isBlank()
                 ? texto(cliente.getNombreRecinto())
@@ -629,8 +629,7 @@ public class DocumentoService {
         String direccion = cliente != null && !texto(cliente.getDireccion()).isBlank()
                 ? texto(cliente.getDireccion())
                 : texto(tarea.getDireccion());
-        Instant fechaCierre = tarea.getFechaFin() != null ? tarea.getFechaFin()
-                : tarea.getFechaInicio() != null ? tarea.getFechaInicio() : tarea.getFechaCreacion();
+        String periodoEjecucion = periodoEjecucion(tarea, informes);
 
         tituloPortada(document, "Informe de mantenimiento preventivo eléctrico", 16);
         if (!recinto.isBlank()) {
@@ -640,8 +639,8 @@ public class DocumentoService {
             subtituloPortada(document, direccion, false);
         }
         subtituloPortada(document, "Mantenimiento eléctrico", false);
-        if (fechaCierre != null) {
-            subtituloPortada(document, capitalizar(FORMATO_MES_ANO.format(fechaCierre)), false);
+        if (!periodoEjecucion.isBlank()) {
+            subtituloPortada(document, periodoEjecucion, false);
         }
 
         byte[] edificio = cliente != null ? decodificar(cliente.getImagenBase64()) : null;
@@ -651,7 +650,59 @@ public class DocumentoService {
 
         subtituloPortada(document, "Elaborado por Luis Rojas Liberona", false);
         subtituloPortada(document, "Licencia SEC: 17.566.330", false);
-        subtituloPortada(document, "Santiago, septiembre 2026", false);
+        if (!periodoEjecucion.isBlank()) {
+            subtituloPortada(document, "Santiago, " + periodoEjecucion.toLowerCase(new Locale("es", "CL")), false);
+        }
+    }
+
+    private String periodoEjecucion(Tarea tarea, List<InformeTablero> informes) {
+        Instant inicio = tarea.getFechaInicio();
+        Instant termino = tarea.getFechaFin();
+        if (inicio == null || termino == null) {
+            Instant primeraFechaTablero = informes.stream()
+                    .map(InformeTablero::getFechaCreacion)
+                    .filter(java.util.Objects::nonNull)
+                    .min(Comparator.naturalOrder())
+                    .orElse(null);
+            Instant ultimaFechaTablero = informes.stream()
+                    .map(InformeTablero::getFechaCreacion)
+                    .filter(java.util.Objects::nonNull)
+                    .max(Comparator.naturalOrder())
+                    .orElse(null);
+            if (inicio == null) {
+                inicio = primeraFechaTablero;
+            }
+            if (termino == null) {
+                termino = ultimaFechaTablero;
+            }
+        }
+        if (inicio == null && termino == null) {
+            inicio = tarea.getFechaCreacion();
+            termino = inicio;
+        } else if (inicio == null) {
+            inicio = termino;
+        } else if (termino == null) {
+            termino = inicio;
+        }
+
+        YearMonth mesInicio = YearMonth.from(inicio.atZone(ZoneId.of("America/Santiago")));
+        YearMonth mesTermino = YearMonth.from(termino.atZone(ZoneId.of("America/Santiago")));
+        if (mesTermino.isBefore(mesInicio)) {
+            YearMonth temporal = mesInicio;
+            mesInicio = mesTermino;
+            mesTermino = temporal;
+        }
+
+        String nombreInicio = capitalizar(FORMATO_MES.format(mesInicio.atDay(1)));
+        String nombreTermino = capitalizar(FORMATO_MES.format(mesTermino.atDay(1)));
+        if (mesInicio.equals(mesTermino)) {
+            return nombreInicio + " " + mesInicio.getYear();
+        }
+        if (mesInicio.getYear() == mesTermino.getYear()) {
+            return nombreInicio + "-" + nombreTermino + " " + mesInicio.getYear();
+        }
+        return nombreInicio + " " + mesInicio.getYear() + "-"
+                + nombreTermino + " " + mesTermino.getYear();
     }
 
     private void tituloPortada(XWPFDocument document, String valor, int tamano) {
@@ -661,8 +712,8 @@ public class DocumentoService {
         parrafo.setSpacingAfter(0);
         XWPFRun run = parrafo.createRun();
         run.setText(valor);
-        run.setBold(false);
-        run.setFontSize(tamano);
+        run.setBold(true);
+        run.setFontSize(Math.max(tamano, 22));
         run.setFontFamily("Arial");
         run.setColor("2E74B5");
     }
@@ -687,7 +738,7 @@ public class DocumentoService {
         run.setText("Índice");
         run.setBold(true);
         run.setFontFamily("Arial");
-        run.setFontSize(14);
+        run.setFontSize(16);
         run.setColor("1B6DC1");
 
         XWPFParagraph campoIndice = document.createParagraph();
@@ -791,14 +842,9 @@ public class DocumentoService {
                 {"Equipo técnico de la tarea", equipoTecnicoTarea(tarea)},
         });
 
-        agregarTablaMediciones(document, informe);
-        agregarTablaChecklist(document, informe);
+        agregarTablaMedicionesYChecklist(document, informe);
 
-        boolean tieneFotos = !fotosNoTermograficas(informe).isEmpty();
-        boolean tieneObservaciones = informe.getObservaciones() != null && !informe.getObservaciones().isEmpty();
-        if (tieneFotos || tieneObservaciones) {
-            saltoPagina(document);
-        }
+        saltoPagina(document);
 
         tituloAuxiliar(document, "Observaciones generales");
         List<ObservacionTablero> observaciones = new ArrayList<>(informe.getObservaciones());
@@ -824,17 +870,14 @@ public class DocumentoService {
         salto.createRun().addBreak(BreakType.PAGE);
     }
 
-    private void agregarTablaMediciones(XWPFDocument document, InformeTablero informe) {
-        tituloAuxiliar(document, "Variables medidas");
+    private void agregarTablaMedicionesYChecklist(XWPFDocument document, InformeTablero informe) {
         List<MedicionTablero> mediciones = new ArrayList<>(informe.getMediciones());
         mediciones.sort(Comparator.comparingLong(medicion -> medicion.getId() == null ? 0L : medicion.getId()));
-
-        String[][] filas = new String[Math.max(mediciones.size(), 1)][2];
+        List<String[]> filasMediciones = new ArrayList<>();
         if (mediciones.isEmpty()) {
-            filas[0] = new String[] {"Mediciones", "Sin mediciones registradas."};
+            filasMediciones.add(new String[] {"Mediciones", "Sin registro"});
         } else {
-            for (int i = 0; i < mediciones.size(); i++) {
-                MedicionTablero medicion = mediciones.get(i);
+            for (MedicionTablero medicion : mediciones) {
                 String variable = texto(medicion.getLabel());
                 String unidad = texto(medicion.getUnit()).trim();
                 if (!unidad.isBlank()) {
@@ -846,10 +889,116 @@ public class DocumentoService {
                 } else if (!unidad.isBlank() && !valorIncluyeUnidad(valor, unidad)) {
                     valor += " " + unidad;
                 }
-                filas[i] = new String[] {variable, valor};
+                filasMediciones.add(new String[] {variable, valor});
             }
         }
-        agregarTablaDatos(document, filas);
+
+        List<ChecklistTablero> checklist = new ArrayList<>(informe.getChecklist());
+        checklist.sort(Comparator.comparingLong(item -> item.getId() == null ? 0L : item.getId()));
+        int cantidadFilas = Math.max(filasMediciones.size(), checklist.size());
+        XWPFTable tabla = document.createTable(cantidadFilas + 2, 4);
+        tabla.setWidth("100%");
+        tabla.setTableAlignment(TableRowAlign.LEFT);
+        CTTblPr tblPr = tabla.getCTTbl().getTblPr();
+        tblPr.addNewTblLayout().setType(STTblLayoutType.FIXED);
+        CTTblCellMar cellMar = tblPr.addNewTblCellMar();
+        cellMar.addNewTop().setW(BigInteger.valueOf(20));
+        cellMar.addNewBottom().setW(BigInteger.valueOf(20));
+        cellMar.addNewLeft().setW(BigInteger.valueOf(75));
+        cellMar.addNewRight().setW(BigInteger.valueOf(75));
+        CTTblBorders bordes = tblPr.addNewTblBorders();
+        for (CTBorder borde : List.of(
+                bordes.addNewTop(), bordes.addNewLeft(), bordes.addNewBottom(), bordes.addNewRight(),
+                bordes.addNewInsideH(), bordes.addNewInsideV())) {
+            borde.setVal(STBorder.SINGLE);
+            borde.setSz(BigInteger.valueOf(4));
+            borde.setColor("C9CFE0");
+        }
+
+        String[] anchos = {"3400", "1100", "4800", "1500"};
+        XWPFTableRow encabezados = tabla.getRow(0);
+        encabezados.getCtRow().addNewTrPr().addNewCantSplit();
+        String[] titulos = {"Variables medidas", "", "Checklist de inspección", ""};
+        for (int columna = 0; columna < 4; columna++) {
+            configurarCeldaTablaCompacta(encabezados.getCell(columna), titulos[columna],
+                    "4B2495", "FFFFFF", true, columna == 1 || columna == 3,
+                    anchos[columna], 11);
+        }
+
+        XWPFTableRow subencabezados = tabla.getRow(1);
+        subencabezados.getCtRow().addNewTrPr().addNewCantSplit();
+        String[] titulosColumnas = {"Variable", "Valor", "Punto revisado", "Resultado"};
+        for (int columna = 0; columna < 4; columna++) {
+            configurarCeldaTablaCompacta(subencabezados.getCell(columna), titulosColumnas[columna],
+                    "EDF1F9", "1B6DC1", true, columna == 1 || columna == 3,
+                    anchos[columna], 9);
+        }
+
+        for (int filaIndice = 0; filaIndice < cantidadFilas; filaIndice++) {
+            XWPFTableRow fila = tabla.getRow(filaIndice + 2);
+            fila.getCtRow().addNewTrPr().addNewCantSplit();
+            String fondo = filaIndice % 2 == 0 ? "FFFFFF" : "F7F6FC";
+            if (filaIndice < filasMediciones.size()) {
+                String[] medicion = filasMediciones.get(filaIndice);
+                configurarCeldaTablaCompacta(fila.getCell(0), medicion[0], "EDF1F9", "333333",
+                        false, false, anchos[0], 9);
+                configurarCeldaTablaCompacta(fila.getCell(1), medicion[1], fondo, "333333",
+                        false, true, anchos[1], 9);
+            } else {
+                configurarCeldaTablaCompacta(fila.getCell(0), "", "FFFFFF", "333333",
+                        false, false, anchos[0], 9);
+                configurarCeldaTablaCompacta(fila.getCell(1), "", "FFFFFF", "333333",
+                        false, false, anchos[1], 9);
+            }
+
+            if (filaIndice < checklist.size()) {
+                ChecklistTablero item = checklist.get(filaIndice);
+                String estado = estadoChecklist(item.getStatus());
+                String fondoEstado = switch (estado) {
+                    case "OK" -> "E5F4EA";
+                    case "C/R" -> "FFF1D6";
+                    case "N/A" -> "EEF0F4";
+                    default -> fondo;
+                };
+                String colorEstado = switch (estado) {
+                    case "OK" -> "187443";
+                    case "C/R" -> "9A5B00";
+                    case "N/A" -> "626B7A";
+                    default -> "333333";
+                };
+                configurarCeldaTablaCompacta(fila.getCell(2), texto(item.getLabel()), fondo,
+                        "333333", false, false, anchos[2], 9);
+                configurarCeldaTablaCompacta(fila.getCell(3), estado, fondoEstado,
+                        colorEstado, true, true, anchos[3], 9);
+            } else {
+                configurarCeldaTablaCompacta(fila.getCell(2), "", "FFFFFF", "333333",
+                        false, false, anchos[2], 9);
+                configurarCeldaTablaCompacta(fila.getCell(3), "", "FFFFFF", "333333",
+                        false, false, anchos[3], 9);
+            }
+        }
+    }
+
+    private void configurarCeldaTablaCompacta(XWPFTableCell celda, String valor, String fondo,
+                                                String colorTexto, boolean negrita, boolean centrar,
+                                                String ancho, int tamano) {
+        celda.setWidth(ancho);
+        celda.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
+        sombrearCelda(celda, fondo);
+        XWPFParagraph parrafo = celda.getParagraphs().isEmpty()
+                ? celda.addParagraph()
+                : celda.getParagraphs().get(0);
+        parrafo.setSpacingBefore(15);
+        parrafo.setSpacingAfter(15);
+        if (centrar) {
+            parrafo.setAlignment(ParagraphAlignment.CENTER);
+        }
+        XWPFRun run = parrafo.createRun();
+        run.setText(valor == null || valor.isBlank() ? "" : valor);
+        run.setFontFamily("Arial");
+        run.setFontSize(tamano);
+        run.setBold(negrita);
+        run.setColor(colorTexto);
     }
 
     private boolean valorIncluyeUnidad(String valor, String unidad) {
@@ -862,98 +1011,6 @@ public class DocumentoService {
             case "°c", "c", "celsius" -> normalizado.endsWith("°c") || normalizado.endsWith("celsius");
             default -> normalizado.endsWith(unidadNormalizada);
         };
-    }
-
-    private void agregarTablaChecklist(XWPFDocument document, InformeTablero informe) {
-        XWPFParagraph titulo = document.createParagraph();
-        titulo.setSpacingBefore(120);
-        titulo.setSpacingAfter(60);
-        XWPFRun tituloRun = titulo.createRun();
-        tituloRun.setText("Checklist de inspección");
-        tituloRun.setBold(true);
-        tituloRun.setFontFamily("Arial");
-        tituloRun.setFontSize(11);
-        tituloRun.setColor("4B2495");
-        titulo.setKeepNext(true);
-
-        List<ChecklistTablero> checklist = new ArrayList<>(informe.getChecklist());
-        checklist.sort(Comparator.comparingLong(item -> item.getId() == null ? 0L : item.getId()));
-        if (checklist.isEmpty()) {
-            parrafoCuerpo(document, "No hay puntos de checklist registrados para este tablero.");
-            return;
-        }
-
-        XWPFTable tabla = document.createTable(checklist.size() + 1, 2);
-        tabla.setWidth("100%");
-        tabla.setTableAlignment(TableRowAlign.LEFT);
-        CTTblPr tblPr = tabla.getCTTbl().getTblPr();
-        tblPr.addNewTblLayout().setType(STTblLayoutType.FIXED);
-
-        CTTblCellMar cellMar = tblPr.addNewTblCellMar();
-        cellMar.addNewTop().setW(BigInteger.valueOf(20));
-        cellMar.addNewBottom().setW(BigInteger.valueOf(20));
-        cellMar.addNewLeft().setW(BigInteger.valueOf(110));
-        cellMar.addNewRight().setW(BigInteger.valueOf(110));
-
-        CTTblBorders bordes = tblPr.addNewTblBorders();
-        for (CTBorder borde : List.of(
-                bordes.addNewTop(), bordes.addNewLeft(), bordes.addNewBottom(), bordes.addNewRight(),
-                bordes.addNewInsideH(), bordes.addNewInsideV())) {
-            borde.setVal(STBorder.SINGLE);
-            borde.setSz(BigInteger.valueOf(4));
-            borde.setColor("C9CFE0");
-        }
-
-        XWPFTableRow cabecera = tabla.getRow(0);
-        var propiedadesCabecera = cabecera.getCtRow().addNewTrPr();
-        propiedadesCabecera.addNewCantSplit();
-        configurarCeldaChecklist(cabecera.getCell(0), "Punto revisado", "4B2495", "FFFFFF", true, false, "7600");
-        configurarCeldaChecklist(cabecera.getCell(1), "Resultado", "4B2495", "FFFFFF", true, true, "1445");
-
-        for (int i = 0; i < checklist.size(); i++) {
-            ChecklistTablero item = checklist.get(i);
-            XWPFTableRow fila = tabla.getRow(i + 1);
-            fila.getCtRow().addNewTrPr().addNewCantSplit();
-
-            XWPFTableCell celdaItem = fila.getCell(0);
-            configurarCeldaChecklist(celdaItem, texto(item.getLabel()), i % 2 == 0 ? "FFFFFF" : "F7F6FC",
-                    "333333", false, false, "7600");
-
-            String estado = estadoChecklist(item.getStatus());
-            String fondoEstado = switch (estado) {
-                case "OK" -> "E5F4EA";
-                case "C/R" -> "FFF1D6";
-                case "N/A" -> "EEF0F4";
-                default -> "F7F6FC";
-            };
-            String colorEstado = switch (estado) {
-                case "OK" -> "187443";
-                case "C/R" -> "9A5B00";
-                case "N/A" -> "626B7A";
-                default -> "333333";
-            };
-            configurarCeldaChecklist(fila.getCell(1), estado, fondoEstado, colorEstado,
-                    true, true, "1445");
-        }
-    }
-
-    private void configurarCeldaChecklist(XWPFTableCell celda, String valor, String fondo, String colorTexto,
-                                           boolean negrita, boolean centrar, String ancho) {
-        celda.setWidth(ancho);
-        celda.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
-        sombrearCelda(celda, fondo);
-        XWPFParagraph parrafo = celda.getParagraphs().isEmpty() ? celda.addParagraph() : celda.getParagraphs().get(0);
-        parrafo.setSpacingBefore(25);
-        parrafo.setSpacingAfter(25);
-        if (centrar) {
-            parrafo.setAlignment(ParagraphAlignment.CENTER);
-        }
-        XWPFRun run = parrafo.createRun();
-        run.setText(valor == null || valor.isBlank() ? "—" : valor);
-        run.setFontFamily("Arial");
-        run.setFontSize(8);
-        run.setBold(negrita);
-        run.setColor(colorTexto);
     }
 
     private String estadoChecklist(String estado) {
@@ -990,7 +1047,9 @@ public class DocumentoService {
             XWPFParagraph parrafo = document.createParagraph();
             parrafo.setSpacingBefore(0);
             parrafo.setSpacingAfter(0);
-            parrafo.createRun().setFontSize(10);
+            XWPFRun run = parrafo.createRun();
+            run.setFontFamily("Arial");
+            run.setFontSize(10);
         }
     }
 
@@ -1001,7 +1060,7 @@ public class DocumentoService {
         XWPFRun run = parrafo.createRun();
         run.setText("- " + texto(texto));
         run.setFontFamily("Arial");
-        run.setFontSize(10);
+        run.setFontSize(12);
     }
 
     private void agregarTablaDatos(XWPFDocument document, String[][] campos) {
@@ -1464,6 +1523,7 @@ public class DocumentoService {
                     parrafoPie.setSpacingAfter(60);
                     XWPFRun runPie = parrafoPie.createRun();
                     runPie.setText(foto.pie());
+                    runPie.setFontFamily("Arial");
                     runPie.setFontSize(9);
                     runPie.setItalic(true);
                     runPie.setColor("5A6275");
@@ -1531,9 +1591,9 @@ public class DocumentoService {
         parrafo.setSpacingAfter(80);
         XWPFRun run = parrafo.createRun();
         run.setText(texto);
-        run.setBold(false);
+        run.setBold(true);
         run.setFontFamily("Arial");
-        run.setFontSize(14);
+        run.setFontSize(16);
         run.setColor("1B6DC1");
     }
 
@@ -1544,9 +1604,9 @@ public class DocumentoService {
         parrafo.setSpacingAfter(60);
         XWPFRun run = parrafo.createRun();
         run.setText(texto);
-        run.setBold(false);
+        run.setBold(true);
         run.setFontFamily("Arial");
-        run.setFontSize(13);
+        run.setFontSize(14);
         run.setColor("1B6DC1");
     }
 
@@ -1559,7 +1619,7 @@ public class DocumentoService {
         run.setText(texto);
         run.setBold(true);
         run.setFontFamily("Arial");
-        run.setFontSize(11);
+        run.setFontSize(12);
         run.setColor("4B2495");
     }
 
@@ -1577,7 +1637,7 @@ public class DocumentoService {
         XWPFRun run = parrafo.createRun();
         run.setText(texto);
         run.setFontFamily("Arial");
-        run.setFontSize(10);
+        run.setFontSize(12);
     }
 
     private void parrafoLista(XWPFDocument document, String texto) {
@@ -1587,7 +1647,7 @@ public class DocumentoService {
         XWPFRun run = parrafo.createRun();
         run.setText("• " + texto(texto));
         run.setFontFamily("Arial");
-        run.setFontSize(10);
+        run.setFontSize(12);
     }
 
     private void configurarPagina(XWPFDocument document) {
@@ -1607,10 +1667,12 @@ public class DocumentoService {
         XWPFParagraph parrafo = pie.createParagraph();
         parrafo.setAlignment(ParagraphAlignment.CENTER);
         XWPFRun run = parrafo.createRun();
+        run.setFontFamily("Arial");
         run.setFontSize(9);
         run.setColor("8A8A8A");
         run.setText("Página ");
         XWPFRun campo = parrafo.createRun();
+        campo.setFontFamily("Arial");
         campo.setFontSize(9);
         campo.setColor("8A8A8A");
         CTR ctr = campo.getCTR();
